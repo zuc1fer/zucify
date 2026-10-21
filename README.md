@@ -1,6 +1,6 @@
 <div align="center">
 
-# Liner
+# Zucify
 
 **Modern desktop music streaming player with syllable-synced lyrics and reactive dynamic visuals.**
 
@@ -9,7 +9,6 @@
 [![TypeScript 5](https://img.shields.io/badge/TypeScript_5-5.0-3178C6?style=flat-square&logo=typescript&logoColor=black&labelColor=white)](https://www.typescriptlang.org)
 [![Tailwind CSS v4](https://img.shields.io/badge/Tailwind_CSS_v4-v4.0-06B6D4?style=flat-square&logo=tailwindcss&logoColor=black&labelColor=white)](https://tailwindcss.com)
 [![WebAssembly](https://img.shields.io/badge/Rust-WebAssembly-654FF0?style=flat-square&logo=webassembly&logoColor=black&labelColor=white)](https://webassembly.org)
-[![License: Source-Available](https://img.shields.io/badge/License-Source--Available-blueviolet?style=flat-square&labelColor=white)](./LICENSE)
 
 [Preview](#preview) •
 [Architecture](#architecture) •
@@ -20,7 +19,7 @@
 
 <br/>
 
-<img src="./.github/assets/lyrics_preview.png" alt="Liner Fullscreen Lyrics" width="100%" />
+<img src="./.github/assets/lyrics_preview.png" alt="Zucify Fullscreen Lyrics" width="100%" />
 
 </div>
 
@@ -32,12 +31,12 @@
   <table>
     <tr>
       <td align="center" width="50%">
-        <img src="./.github/assets/home.png" alt="Liner Home Page" />
+        <img src="./.github/assets/home.png" alt="Zucify Home Page" />
         <br/>
         <sub><b>Home</b></sub>
       </td>
       <td align="center" width="50%">
-        <img src="./.github/assets/demo.gif" alt="Liner Fullscreen Mode Demo" />
+        <img src="./.github/assets/demo.gif" alt="Zucify Fullscreen Mode Demo" />
         <br/>
         <sub><b>Fullscreen mode</b></sub>
       </td>
@@ -48,14 +47,14 @@
 ---
 
 > [!NOTE]
-> Liner client connects to the official Liner API backend for music catalog, streaming playback, and synchronized lyrics.
+> Zucify is a personal client fork of [Liner Desktop](https://github.com/tryliner/desktop). It continues to use Liner's official API for the music catalog, streaming playback, accounts, and synchronized lyrics; this repository does not host that service or its account database.
 
 ---
 
 ## Architecture
 
 ```
-liner/desktop/
+zucify/
 ├── electron/
 │   ├── main.ts              # Electron main process & IPC handlers
 │   ├── preload.ts           # Context bridge & secure renderer bindings
@@ -87,9 +86,9 @@ liner/desktop/
 ### Setup
 
 ```bash
-# 1. Clone repository
-git clone https://github.com/tryliner/desktop.git
-cd desktop
+# 1. Clone this repository
+git clone https://github.com/zuc1fer/zucify.git
+cd zucify
 
 # 2. Install dependencies (pnpm or Bun)
 pnpm install
@@ -102,7 +101,7 @@ bun install
 ### Running in Development
 
 ```bash
-# Start Liner in development mode (Electron app with Vite hot-reload)
+# Start Zucify in development mode (Electron app with Vite hot-reload)
 pnpm run dev
 # or
 bun run dev
@@ -139,7 +138,7 @@ Compiled distributions will be placed in the `release/` directory.
 
 ## Contributing
 
-Bug fixes, small features, and docs fixes are welcome. Read [CONTRIBUTING.md](./CONTRIBUTING.md) before you open a pull request. The [license](./LICENSE) limits what a fork is allowed to do.
+This is a personal customization of Liner Desktop. Before redistributing changes or builds, review the original project's license and contribution terms.
 
 ---
 
@@ -153,10 +152,5 @@ Bug fixes, small features, and docs fixes are welcome. Read [CONTRIBUTING.md](./
 
 ## License
 
-Liner is distributed under the **Liner Source-Available & Non-Commercial Contribution License**.
-
-- **Allowed**: Personal non-commercial usage, local builds, and upstream contributions.
-- **Prohibited**: Commercial distribution, public competing forks, or extracting core algorithms for third-party products.
-
-See [LICENSE](./LICENSE) for details.
+Zucify is based on [Liner Desktop](https://github.com/tryliner/desktop), whose terms are identified as the **Liner Source-Available & Non-Commercial Contribution License**. The upstream project describes personal non-commercial use, local builds, and upstream contributions as allowed; it lists commercial distribution, public competing forks, and extracting core algorithms for third-party products as prohibited. This checkout does not include a `LICENSE` file, so consult the upstream project for the authoritative terms before redistributing or using this code commercially.
 

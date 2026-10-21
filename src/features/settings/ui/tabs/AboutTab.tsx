@@ -133,7 +133,7 @@ export function AboutTab({ searchQuery }: { searchQuery?: string }) {
                 ? logo
                 : brandingLogos[accentVariant]
             }
-            alt="Liner Logo"
+            alt="Zucify Logo"
             width={44}
             height={44}
             className={
@@ -219,7 +219,7 @@ export function AboutTab({ searchQuery }: { searchQuery?: string }) {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => openUrl("https://github.com/tryliner/desktop")}
+            onClick={() => openUrl("https://github.com/zuc1fer/zucify")}
             className="!h-[28px] !px-[10px] !text-[12px] gap-[6px]"
           >
             <FaGithub size={13} />
@@ -228,7 +228,7 @@ export function AboutTab({ searchQuery }: { searchQuery?: string }) {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => openUrl("https://tryliner.fun")}
+            onClick={() => openUrl("https://github.com/zuc1fer/zucify/releases")}
             className="!h-[28px] !px-[10px] !text-[12px] gap-[6px]"
           >
             <FaGlobe size={12} className="text-text-tertiary" />

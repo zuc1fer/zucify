@@ -203,14 +203,14 @@ export default function LoginPage() {
           <div className="flex shrink-0 items-center gap-[10px]">
             <AppImage
               src={logo}
-              alt="Liner"
+              alt="Zucify"
               width={25}
               height={30}
               className="theme-logo h-[22px] w-auto"
               priority
             />
             <span className="text-[16px] font-[600] tracking-[-0.025em] text-text-primary">
-              Liner
+              Zucify
             </span>
             <Select
               options={LOCALE_OPTIONS}

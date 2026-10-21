@@ -47,7 +47,7 @@ export function resetWebRemixSession(): void {
 
 async function mintContentPoToken(videoId: string): Promise<string> {
   const mint = typeof window === "undefined" ? undefined : window.linerElectron?.mintPoToken;
-  if (!mint) throw new InnertubeError("PO tokens need a newer Liner app version.", 501);
+  if (!mint) throw new InnertubeError("PO tokens need a newer Zucify app version.", 501);
   return mint(videoId);
 }
 

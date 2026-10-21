@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# registers the liner:// protocol for xdg-open (linux dev testing).
+# registers zucify:// and the legacy liner:// protocol for xdg-open (linux dev testing).
 # packaged installs self-register via electron-builder protocols, this is
 # only so a dev checkout answers share-link clicks too.
-# usage: ./scripts/register-deeplink-linux.sh [--binary /path/to/liner]
+# usage: ./scripts/register-deeplink-linux.sh [--binary /path/to/zucify]
 set -euo pipefail
 
 DESKTOP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -12,16 +12,16 @@ if [ "${1:-}" = "--binary" ]; then
   BIN="${2:?pass a binary path after --binary}"
   [ -x "$BIN" ] || { echo "not executable: $BIN" >&2; exit 1; }
   EXEC="$BIN %u"
-  ENTRY="liner-handler.desktop"
-  LABEL="Liner"
+  ENTRY="zucify-handler.desktop"
+  LABEL="Zucify"
 else
   ELECTRON="$DESKTOP_DIR/node_modules/.bin/electron"
   [ -x "$ELECTRON" ] || { echo "electron not found, run pnpm install first" >&2; exit 1; }
   # second instance forwards the url to the running dev app and quits,
   # so keep the vite dev server running for this to open anything
   EXEC="$ELECTRON $DESKTOP_DIR %u"
-  ENTRY="liner-dev.desktop"
-  LABEL="Liner (dev)"
+  ENTRY="zucify-dev.desktop"
+  LABEL="Zucify (dev)"
 fi
 
 mkdir -p "$APP_DIR"
@@ -32,11 +32,13 @@ Exec=$EXEC
 Type=Application
 Terminal=false
 NoDisplay=true
-MimeType=x-scheme-handler/liner;
+MimeType=x-scheme-handler/zucify;x-scheme-handler/liner;
 EOF
 
 update-desktop-database "$APP_DIR" >/dev/null 2>&1 || true
+xdg-mime default "$ENTRY" x-scheme-handler/zucify
 xdg-mime default "$ENTRY" x-scheme-handler/liner
 
-echo "handler: $(xdg-mime query default x-scheme-handler/liner)"
-echo "test with: xdg-open 'liner://artist?id=UCGtGpOIGHfRu1KYL9pi-mNQ'"
+echo "Zucify handler: $(xdg-mime query default x-scheme-handler/zucify)"
+echo "Legacy Liner handler: $(xdg-mime query default x-scheme-handler/liner)"
+echo "test with: xdg-open 'zucify://artist?id=UCGtGpOIGHfRu1KYL9pi-mNQ'"

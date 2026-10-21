@@ -19,7 +19,7 @@ import {
   type SignRequestInput,
 } from "./crypto.js";
 import {
-  DEEP_LINK_SCHEME,
+  DEEP_LINK_SCHEMES,
   findDeeplinkArg,
   parseDeeplink,
   type DeeplinkTarget,
@@ -168,7 +168,7 @@ const shutdown = createShutdown({
   watchdogMs: 4000,
 });
 
-// liner:// deeplink support (share links bounce here from link.tryliner.fun)
+// Zucify and legacy Liner deeplinks (shared links still use Liner's redirector).
 
 // cold-start url arrives before the window exists, stash it until renderer is ready
 let pendingDeeplink: DeeplinkTarget | null = findDeeplinkArg(process.argv)
@@ -198,7 +198,7 @@ const MIN_WINDOW_HEIGHT = 705;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    title: "Liner",
+    title: "Zucify",
     icon: path.join(process.env.VITE_PUBLIC!, "icon.png"),
     width: DEFAULT_WINDOW_WIDTH,
     height: DEFAULT_WINDOW_HEIGHT,
@@ -324,16 +324,25 @@ function createWindow() {
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
-    bundleManager = new BundleManager({
-      defaultRendererDist: RENDERER_DIST,
-    });
-    bundleManager.setMainWindow(mainWindow);
-    const manager = bundleManager;
-    const win = mainWindow;
-    void (async () => {
-      if (app.isPackaged) await manager.updateBeforeLaunch().catch(() => undefined);
-      if (!win.isDestroyed()) win.loadFile(manager.getEffectiveIndexPath());
-    })();
+    const bundleUpdaterUrl = process.env.ZUCIFY_UPDATER_URL?.trim();
+    const bundleUpdaterPublicKey = process.env.ZUCIFY_UPDATER_PUBLIC_KEY?.trim();
+    if (bundleUpdaterUrl && bundleUpdaterPublicKey) {
+      bundleManager = new BundleManager({
+        defaultRendererDist: RENDERER_DIST,
+        updaterUrl: bundleUpdaterUrl,
+        publicKeyHex: bundleUpdaterPublicKey,
+      });
+      bundleManager.setMainWindow(mainWindow);
+      const manager = bundleManager;
+      const win = mainWindow;
+      void (async () => {
+        if (app.isPackaged) await manager.updateBeforeLaunch().catch(() => undefined);
+        if (!win.isDestroyed()) win.loadFile(manager.getEffectiveIndexPath());
+      })();
+    } else {
+      bundleManager = null;
+      mainWindow.loadFile(path.join(RENDERER_DIST, "index.html"));
+    }
   }
 
   mainWindow.once("ready-to-show", () => {
@@ -373,12 +382,12 @@ function createWindow() {
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   console.warn(
-    "\n\x1b[33m[Liner]\x1b[0m Another instance of Liner is already running in the background. Exiting development instance.\nTo run in development mode, please close the running Liner application first.\n"
+    "\n\x1b[33m[Zucify]\x1b[0m Another instance of Zucify is already running in the background. Exiting development instance.\nTo run in development mode, please close the running Zucify application first.\n"
   );
   app.quit();
 } else {
   app.on("second-instance", (_event, argv) => {
-    // running instance gets here when xdg-open / os launches liner:// again
+    // running instance gets here when xdg-open / os launches a registered app link again
     const raw = findDeeplinkArg(argv);
     if (shutdown.isQuitting()) {
       // this process is on its way out and can no longer show a window; the new
@@ -405,12 +414,14 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(() => {
-    // register liner:// so browsers / xdg-open route share links to us
-    // (on linux the packaged .desktop carries the mime handler too)
-    if (process.defaultApp && process.argv.length >= 2) {
-      app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME, process.execPath, [path.resolve(process.argv[1]!)]);
-    } else {
-      app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
+    // register Zucify's scheme and the legacy Liner alias used by existing share links
+    // (on linux the packaged .desktop carries these mime handlers too)
+    for (const scheme of DEEP_LINK_SCHEMES) {
+      if (process.defaultApp && process.argv.length >= 2) {
+        app.setAsDefaultProtocolClient(scheme, process.execPath, [path.resolve(process.argv[1]!)]);
+      } else {
+        app.setAsDefaultProtocolClient(scheme);
+      }
     }
     touchBarManager = new TouchBarManager(
       path.join(__dirname, "preload.cjs"),
@@ -577,7 +588,7 @@ if (!gotTheLock) {
           return desktopName.trim();
         }
       } catch {}
-      return "liner";
+      return "zucify";
     };
 
     const installLinuxAppIcon = async (iconName: string, png: Buffer) => {
@@ -1572,7 +1583,7 @@ if (!gotTheLock) {
     // OTA bundle updater IPC handlers
     ipcMain.handle("bundle:check", async () => {
       if (!bundleManager) {
-        return { available: false, error: "Bundle updater inactive (dev mode)" };
+        return { available: false, error: "Bundle updater is not configured" };
       }
       return await bundleManager.checkForUpdates();
     });

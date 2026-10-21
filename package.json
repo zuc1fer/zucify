@@ -1,14 +1,11 @@
 {
-  "name": "@liner/client",
+  "name": "zucify",
   "version": "0.1.40",
   "type": "module",
   "private": true,
-  "description": "Liner Music Player",
-  "author": {
-    "name": "hkamori",
-    "email": "dev@tryliner.fun"
-  },
-  "desktopName": "liner",
+  "description": "Zucify Music Player",
+  "author": "Zucify contributors",
+  "desktopName": "zucify",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -25,15 +22,15 @@
     "native:build": "pnpm dlx node-gyp@11 rebuild --directory native/snap-preview && node scripts/verify-native-addon.cjs"
   },
   "build": {
-    "appId": "com.hkamori.liner",
-    "productName": "Liner",
-    "executableName": "liner",
+    "appId": "com.zucify.desktop",
+    "productName": "Zucify",
+    "executableName": "zucify",
     "artifactName": "${productName}-${version}-${arch}.${ext}",
     "publish": [
       {
         "provider": "github",
-        "owner": "tryliner",
-        "repo": "desktop"
+        "owner": "zuc1fer",
+        "repo": "zucify"
       }
     ],
     "directories": {
@@ -41,8 +38,9 @@
     },
     "protocols": [
       {
-        "name": "Liner",
+        "name": "Zucify",
         "schemes": [
+          "zucify",
           "liner"
         ]
       }
@@ -53,9 +51,9 @@
       "native/snap-preview/build/Release/snap_preview.node"
     ],
     "linux": {
-      "executableName": "liner",
+      "executableName": "zucify",
       "syncDesktopName": true,
-      "maintainer": "hkamori <dev@tryliner.fun>",
+      "maintainer": "Zucify contributors <zuc1fer@users.noreply.github.com>",
       "icon": "build/icons",
       "target": [
         "AppImage",
@@ -64,21 +62,21 @@
       "category": "Audio"
     },
     "deb": {
-      "packageName": "liner",
-      "artifactName": "liner_${version}_${arch}.${ext}"
+      "packageName": "zucify",
+      "artifactName": "zucify_${version}_${arch}.${ext}"
     },
     "appImage": {
-      "artifactName": "Liner-${version}.${ext}"
+      "artifactName": "Zucify-${version}.${ext}"
     },
     "win": {
-      "executableName": "liner",
+      "executableName": "zucify",
       "icon": "build/icon.ico",
       "target": [
         "nsis"
       ]
     },
     "nsis": {
-      "artifactName": "Liner-Setup-${version}.${ext}",
+      "artifactName": "Zucify-Setup-${version}.${ext}",
       "allowToChangeInstallationDirectory": true,
       "oneClick": false
     },

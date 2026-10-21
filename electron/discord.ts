@@ -297,7 +297,7 @@ export class DiscordRpcManager {
 
       const dur = Math.max(0, payload.durationMs || track.durationMs || 0);
 
-      let activityName = "Liner";
+      let activityName = "Zucify";
       let detailsText = title;
       let stateText = isPaused ? `${artist} (Paused)` : artist;
       let rpcStatusDisplayType = StatusDisplayType.STATE; // 1 -> "Listening to [Artist]"
@@ -310,8 +310,8 @@ export class DiscordRpcManager {
           stateText = artist;
           break;
         case "app":
-          activityName = "Liner";
-          rpcStatusDisplayType = StatusDisplayType.NAME; // 0 -> "Listening to Liner"
+          activityName = "Zucify";
+          rpcStatusDisplayType = StatusDisplayType.NAME; // 0 -> "Listening to Zucify"
           detailsText = title;
           stateText = isPaused ? `${artist} (Paused)` : artist;
           break;
@@ -337,7 +337,7 @@ export class DiscordRpcManager {
       }
 
       const activity: SetActivity & { status_display_type?: number } = {
-        name: sanitizeText(activityName) || "Liner",
+        name: sanitizeText(activityName) || "Zucify",
         type: 2, // 2 = ActivityType.Listening -> renders "Listening to" + live progress bar
         details: sanitizeText(detailsText),
         state: sanitizeText(stateText),
@@ -358,7 +358,7 @@ export class DiscordRpcManager {
       const coverImage = toDiscordImageUrl(track.coverUrl);
       if (this.settings.showArtwork && coverImage) {
         activity.largeImageKey = coverImage;
-        activity.largeImageText = sanitizeText(track.album || track.title) || "Liner";
+        activity.largeImageText = sanitizeText(track.album || track.title) || "Zucify";
       }
 
       // Small artwork (Artist photo badge)
@@ -368,20 +368,20 @@ export class DiscordRpcManager {
         activity.smallImageText = sanitizeText(track.artist) || "Artist";
       }
 
-      // Action buttons linking to song or tryliner.fun (Discord allows up to 2 buttons)
+      // Action buttons linking to the song service or Zucify releases (Discord allows up to 2 buttons)
       const buttons: Array<{ label: string; url: string }> = [];
 
       if (this.settings.showButton && track.id) {
         buttons.push({
-          label: "Listen on Liner",
+          label: "Listen on Zucify",
           url: `https://link.tryliner.fun/track?id=${encodeURIComponent(track.id)}`,
         });
       }
 
       if (this.settings.showDownloadButton) {
         buttons.push({
-          label: "Download Liner",
-          url: "https://tryliner.fun",
+          label: "Download Zucify",
+          url: "https://github.com/zuc1fer/zucify/releases",
         });
       }
 

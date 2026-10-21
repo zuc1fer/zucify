@@ -24,7 +24,7 @@ describe("buildOfflineDump", () => {
     expect(dump.failures).toHaveLength(1);
     expect(dump.machine?.trace?.hops).toHaveLength(1);
     expect(JSON.stringify(dump)).not.toMatch(/bearer|token|authorization|proxy/i);
-    expect(dumpFilename(dump)).toMatch(/^liner-offline-dump-.*\.json$/);
+    expect(dumpFilename(dump)).toMatch(/^zucify-offline-dump-.*\.json$/);
   });
 
   it("calls electron saveDump when available", async () => {

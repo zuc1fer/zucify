@@ -48,7 +48,7 @@ export function buildOfflineDump(input: {
 }
 
 export function dumpFilename(dump: OfflineDump): string {
-  return `liner-offline-dump-${dump.generatedAt.replace(/[:.]/g, "-")}.json`;
+  return `zucify-offline-dump-${dump.generatedAt.replace(/[:.]/g, "-")}.json`;
 }
 
 export interface SaveDumpResult {

@@ -1,5 +1,5 @@
 /**
- * Client Telemetry & Metrics Configuration for Liner Desktop.
+ * Client telemetry and metrics configuration for Zucify Desktop.
  * Easily toggled via environment variables or runtime switch.
  */
 

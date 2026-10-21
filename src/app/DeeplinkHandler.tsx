@@ -16,7 +16,7 @@ function isUserPlaylistId(id: string): boolean {
   );
 }
 
-// opens shared entities arriving via liner:// deeplinks (main pre-validates)
+// opens shared entities arriving via zucify:// or legacy liner:// links (main pre-validates)
 export default function DeeplinkHandler() {
   const navigate = useNavigate();
 

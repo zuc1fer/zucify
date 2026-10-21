@@ -216,7 +216,7 @@ export class PlayerRuntime {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: track.title,
         artist: track.artists,
-        album: (track as { albumTitle?: string }).albumTitle || "Liner",
+        album: (track as { albumTitle?: string }).albumTitle || "Zucify",
         artwork: track.coverUrl
           ? [
               { src: track.coverUrl, sizes: "96x96", type: "image/jpeg" },
@@ -507,7 +507,7 @@ export class PlayerRuntime {
 
   // between tracks: silence the old source but keep it attached until the next one
   // is ready. Emptying the element here made Chromium drop the system media session
-  // during every skip, so Windows controls / FluentFlyout lost Liner after a track change.
+  // during every skip, so Windows controls / FluentFlyout lost Zucify after a track change.
   private pauseForTransition() {
     this.isResetting = true;
     this.currentSessionExpiresAt = null;

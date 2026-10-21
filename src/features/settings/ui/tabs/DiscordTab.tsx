@@ -143,7 +143,7 @@ export function DiscordTab({ searchQuery }: { searchQuery?: string }) {
                   },
                   {
                     value: "app",
-                    label: t("settings.discord.status_display.app") || "Liner (App name)",
+                    label: t("settings.discord.status_display.app") || "Zucify (App name)",
                   },
                 ]}
               />
@@ -232,12 +232,12 @@ export function DiscordTab({ searchQuery }: { searchQuery?: string }) {
 
       {/* Profile Buttons */}
       <SettingSection label={t("settings.discord.section_buttons") || "Profile Buttons"}>
-        {/* Listen on Liner button */}
+        {/* Listen on Zucify button */}
         <SettingRow
-          title={t("settings.discord.show_button.title") || "'Listen on Liner' Button"}
+          title={t("settings.discord.show_button.title") || "'Listen on Zucify' Button"}
           description={
             t("settings.discord.show_button.description") ||
-            "Add an interactive button linking to the song on Liner."
+            "Add an interactive button linking to the song on Zucify."
           }
           titleKey="settings.discord.show_button.title"
           descKey="settings.discord.show_button.description"
@@ -251,12 +251,12 @@ export function DiscordTab({ searchQuery }: { searchQuery?: string }) {
           }
         />
 
-        {/* Download Liner button */}
+        {/* Download Zucify button */}
         <SettingRow
-          title={t("settings.discord.show_download_button.title") || "'Download Liner' Button"}
+          title={t("settings.discord.show_download_button.title") || "'Download Zucify' Button"}
           description={
             t("settings.discord.show_download_button.description") ||
-            "Add an interactive button linking to tryliner.fun to download the app."
+            "Add an interactive button linking to the Zucify releases page to download the app."
           }
           titleKey="settings.discord.show_download_button.title"
           descKey="settings.discord.show_download_button.description"
