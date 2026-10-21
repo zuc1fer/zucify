@@ -6,12 +6,14 @@ import ArtistPage from "@/features/artist/ui/ArtistPage";
 import CollectionPage from "@/features/collection/ui/CollectionPage";
 import LoginPage from "@/features/auth/ui/LoginPage";
 import PlayerPage from "@/features/player/ui/FullscreenPlayer";
+import FriendsPage from "@/features/friends/ui/FriendsPage";
 
 export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/library" element={<LibraryPage />} />
+      <Route path="/friends" element={<FriendsPage />} />
       <Route path="/library/playlist" element={<PlaylistPage />} />
       <Route path="/artist" element={<ArtistPage />} />
       <Route path="/collection" element={<CollectionPage />} />

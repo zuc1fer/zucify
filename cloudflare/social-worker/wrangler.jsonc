@@ -1,0 +1,26 @@
+{
+  "$schema": "https://schema.cloudflare.com/wrangler/config-schema.json",
+  "name": "zucify-social",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-21",
+  "workers_dev": true,
+  "vars": {
+    "LINER_API_URL": "https://api.tryliner.fun"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "zucify-social",
+      "database_id": "a40945ab-6af3-45c8-b1c7-5190496804a1",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "LISTENING_ROOMS", "class_name": "ListeningRoom" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["ListeningRoom"] }
+  ]
+}
