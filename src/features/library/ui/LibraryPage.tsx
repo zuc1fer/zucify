@@ -20,6 +20,7 @@ import { useModalStore } from "../store/modalStore";
 import { useImportStore } from "../store/importStore";
 import { useIsContentTransparent } from "@/features/settings/store/customizationStore";
 import ImportingPlaylistCard from "./ImportingPlaylistCard";
+import { isSocialApiConfigured, socialApi, type SharedPlaylist } from "@/features/friends/socialApi";
 
 const PAGE_SIZE = 24;
 
@@ -183,10 +184,38 @@ export default function LibraryPage() {
   const { data: albumItems = [] } = useExternalItems("album");
   const { data: artistItems = [] } = useExternalItems("artist");
   const { data: externalPlaylistItems = [] } = useExternalItems("playlist");
+  const [sharedPlaylists, setSharedPlaylists] = useState<SharedPlaylist[]>([]);
   const { data: likedCount, isLoading: likedCountLoading } =
     useLikedTrackCount();
   const openCreatePlaylist = useModalStore((state) => state.openCreatePlaylist);
   const hasCustomBg = useIsContentTransparent();
+
+  useEffect(() => {
+    if (!isSocialApiConfigured()) {
+      setSharedPlaylists([]);
+      return;
+    }
+    let active = true;
+    const refresh = async () => {
+      try {
+        const items = await socialApi.getPlaylists();
+        if (active) setSharedPlaylists(items);
+      } catch {
+        // Social playlists are an optional addition to the Liner library.
+      }
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    void refresh();
+    const interval = window.setInterval(refreshWhenVisible, 20_000);
+    window.addEventListener("focus", refreshWhenVisible);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshWhenVisible);
+    };
+  }, []);
 
   const playlistItems: LibraryItemViewModel[] = useMemo(() => {
     if (!playlistsData) return [];
@@ -205,6 +234,29 @@ export default function LibraryPage() {
     }));
   }, [playlistsData, t]);
 
+  const sharedPlaylistItems: LibraryItemViewModel[] = useMemo(() => {
+    const ownedLinerPlaylistIds = new Set((playlistsData?.playlists ?? []).map((playlist) => playlist.id));
+    return sharedPlaylists
+      .filter((playlist) => !playlist.sourcePlaylistId || !ownedLinerPlaylistIds.has(playlist.sourcePlaylistId))
+      .map((playlist) => {
+    const owner = playlist.members.find((member) => member.id === playlist.ownerId);
+    const ownerName = owner?.displayName || owner?.username || "a friend";
+    const coverUrls = [...new Set(playlist.tracks.map((item) => item.track.coverUrl).filter(Boolean))].slice(0, 4);
+    return {
+      id: `shared:${playlist.id}`,
+      title: playlist.title,
+      subtitle: `Shared by ${ownerName} · ${t("common.tracks", { count: playlist.trackCount })}`,
+      imageUrl: coverUrls[0] ?? "",
+      coverUrls,
+      kind: "playlist" as const,
+      isOwned: false,
+      isShared: true,
+      href: `/library/playlist?id=${encodeURIComponent(`shared:${playlist.id}`)}`,
+      addedAt: new Date(playlist.addedAt ?? playlist.createdAt).toISOString(),
+    };
+  });
+  }, [playlistsData, sharedPlaylists, t]);
+
   const initialLoading = playlistsLoading;
 
   useEffect(() => {
@@ -219,7 +271,7 @@ export default function LibraryPage() {
   const filteredItems = useMemo(() => {
     let source: LibraryItemViewModel[];
     if (activeTab === "playlists") {
-      source = [...playlistItems, ...externalPlaylistItems];
+      source = [...playlistItems, ...sharedPlaylistItems, ...externalPlaylistItems];
     } else if (activeTab === "albums") {
       source = albumItems;
     } else if (activeTab === "artists") {
@@ -241,6 +293,7 @@ export default function LibraryPage() {
     activeTab,
     debouncedQuery,
     playlistItems,
+    sharedPlaylistItems,
     externalPlaylistItems,
     albumItems,
     artistItems,

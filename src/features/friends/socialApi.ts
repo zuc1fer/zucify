@@ -52,6 +52,7 @@ export interface SharedPlaylist {
   title: string;
   sourcePlaylistId?: string | null;
   createdAt: number;
+  addedAt?: number;
   trackCount: number;
   members: SocialPerson[];
   tracks: SharedPlaylistTrack[];
@@ -148,6 +149,7 @@ export const socialApi = {
   sendSong: (toUserId: string, track: Track) => post<SocialMessage>("/api/messages", { toUserId, kind: "song", payload: { track } }),
   sendPlaylist: (toUserId: string, playlistId: string) => post<SocialMessage>("/api/messages", { toUserId, kind: "playlist", payload: { playlistId } }),
   getPlaylists: () => request<{ items: SharedPlaylist[] }>("/api/playlists").then((result) => result.items),
+  getPlaylist: (playlistId: string) => request<SharedPlaylist>(`/api/playlists/${encodeURIComponent(playlistId)}`),
   createPlaylist: (title: string, memberIds: string[]) => post<{ id: string }>("/api/playlists", { title, memberIds }),
   getLinkedPlaylist: (sourcePlaylistId: string) => request<SharedPlaylist>(`/api/playlists/source/${encodeURIComponent(sourcePlaylistId)}`),
   syncExistingPlaylist: (input: { sourcePlaylistId: string; title: string; tracks: { sourceItemId: string; track: Track }[] }) =>

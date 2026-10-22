@@ -200,14 +200,16 @@ async function requests(env: Env, userId: string): Promise<Response> {
   return json({ items: (result.results ?? []).map((row: any) => requestView(row, userId)) });
 }
 
-async function playlists(env: Env, userId: string, sourcePlaylistId?: string): Promise<Response> {
+async function playlists(env: Env, userId: string, sourcePlaylistId?: string, playlistId?: string): Promise<Response> {
   const result = await env.DB.prepare(
-    `SELECT p.id, p.owner_id AS ownerId, p.title, p.source_playlist_id AS sourcePlaylistId, p.created_at AS createdAt,
+    `SELECT p.id, p.owner_id AS ownerId, p.title, p.source_playlist_id AS sourcePlaylistId,
+       p.created_at AS createdAt, m.added_at AS addedAt,
        (SELECT COUNT(*) FROM shared_playlist_tracks t WHERE t.playlist_id = p.id) AS trackCount
      FROM shared_playlists p JOIN shared_playlist_members m ON m.playlist_id = p.id
      WHERE m.user_id = ? AND (? IS NULL OR p.source_playlist_id = ?)
-     ORDER BY p.created_at DESC LIMIT 100`,
-  ).bind(userId, sourcePlaylistId ?? null, sourcePlaylistId ?? null).all();
+       AND (? IS NULL OR p.id = ?)
+     ORDER BY m.added_at DESC LIMIT 100`,
+  ).bind(userId, sourcePlaylistId ?? null, sourcePlaylistId ?? null, playlistId ?? null, playlistId ?? null).all();
   const items = [];
   for (const row of result.results ?? []) {
     const [members, tracks, reactionRows] = await Promise.all([
@@ -386,6 +388,14 @@ async function handleApi(request: Request, env: Env, user: SocialUser): Promise<
     const result = await response.json() as { items?: unknown[] };
     const playlist = result.items?.[0];
     return playlist ? json(playlist) : error("That collaborative playlist was not found.", 404);
+  }
+  const sharedPlaylistPath = path.match(/^\/api\/playlists\/([^/]+)$/);
+  if (method === "GET" && sharedPlaylistPath) {
+    const playlistId = decodeURIComponent(sharedPlaylistPath[1]);
+    const response = await playlists(env, user.id, undefined, playlistId);
+    const result = await response.json() as { items?: unknown[] };
+    const playlist = result.items?.[0];
+    return playlist ? json(playlist) : error("That shared playlist was not found.", 404);
   }
   if (method === "GET" && path === "/api/sessions") return listeningSessions(env, user.id);
 

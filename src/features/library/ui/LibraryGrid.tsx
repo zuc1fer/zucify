@@ -62,6 +62,7 @@ function LoadingSkeletonList() {
 function useItemMenuItems(item: LibraryItemViewModel): DropdownMenuItem[] {
   const { t } = useTranslation();
   return useMemo(() => {
+    if (item.isShared) return [];
     const entityType =
       item.kind === "artist"
         ? "artist"
@@ -86,7 +87,7 @@ function useItemMenuItems(item: LibraryItemViewModel): DropdownMenuItem[] {
         },
       },
     ];
-  }, [item.id, item.title, item.imageUrl, item.subtitle, item.kind, item.isOwned, item.href, t]);
+  }, [item.id, item.title, item.imageUrl, item.subtitle, item.kind, item.isOwned, item.isShared, item.href, t]);
 }
 
 function LibraryItemCard({ item }: { item: LibraryItemViewModel }) {

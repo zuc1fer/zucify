@@ -30,7 +30,7 @@ import {
   useReorderPlaylistTracks,
 } from "../hooks";
 import { useListReorder } from "@/shared/hooks";
-import { playerEngine } from "@/features/player";
+import { playerEngine, usePlayerStore } from "@/features/player";
 import type { Track } from "@/shared/types";
 import { useTranslation } from "@/languages";
 import { api } from "@/shared/api";
@@ -65,6 +65,7 @@ interface TrackItemProps {
   socialTrack?: SharedPlaylistTrack;
   addedByName?: string;
   isSocialAdded?: boolean;
+  socialOnly?: boolean;
   reactionDisabled?: boolean;
   onReaction?: (item: SharedPlaylistTrack, emoji: TrackReactionEmoji, reacted: boolean) => void;
 }
@@ -82,6 +83,7 @@ const TrackItem = memo(function TrackItem({
   socialTrack,
   addedByName,
   isSocialAdded = false,
+  socialOnly = false,
   reactionDisabled = false,
   onReaction,
 }: TrackItemProps) {
@@ -105,8 +107,8 @@ const TrackItem = memo(function TrackItem({
         artistId={track.artistId}
         artistList={track.artistList}
         coverUrl={track.coverUrl || playlistCoverUrl}
-        playlistId={isSocialAdded ? undefined : playlistId}
-        playlistItemId={isSocialAdded ? undefined : track.playlistItemId}
+        playlistId={socialOnly || isSocialAdded ? undefined : playlistId}
+        playlistItemId={socialOnly || isSocialAdded ? undefined : track.playlistItemId}
         playlistTitle={playlistTitle}
         showReorderHandle={showReorderHandle}
         onGrabStart={onGrabStart}
@@ -159,6 +161,9 @@ function LibraryPlaylistContent() {
   const id = searchParams.get("id");
   const isLikesMode = id === "likes";
   const decodedId = id ? decodeURIComponent(id) : null;
+  const isSharedMode = Boolean(decodedId?.startsWith("shared:"));
+  const socialPlaylistId = isSharedMode ? decodedId!.slice("shared:".length) : null;
+  const isReadOnly = isLikesMode || isSharedMode;
   const scrollRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
   const hasCustomBg = useIsContentTransparent();
@@ -173,13 +178,14 @@ function LibraryPlaylistContent() {
     data: playlistDetail,
     isLoading: playlistLoading,
     error: playlistError,
-  } = usePlaylist(isLikesMode ? null : decodedId);
+  } = usePlaylist(isLikesMode || isSharedMode ? null : decodedId);
 
   const { data: likesData, isLoading: likesLoading } = useLikedTracks(
     isLikesMode ? { limit: 1000, offset: 0 } : undefined,
   );
 
   const currentUser = useAuthStore((state) => state.user);
+  const currentTrack = usePlayerStore((state) => state.currentTrack);
   const socialConfigured = isSocialApiConfigured();
   const [linkedPlaylist, setLinkedPlaylist] = useState<SharedPlaylist | null>(null);
   const [linkStatus, setLinkStatus] = useState<"loading" | "unlinked" | "linked" | "error" | "unconfigured">("loading");
@@ -189,7 +195,7 @@ function LibraryPlaylistContent() {
   const [socialError, setSocialError] = useState("");
   const lastSyncedSourceRef = useRef("");
 
-  const isLoading = isLikesMode ? likesLoading : playlistLoading;
+  const isLoading = isLikesMode ? likesLoading : isSharedMode ? linkStatus === "loading" : playlistLoading;
 
   const viewData = (() => {
     if (isLikesMode) {
@@ -206,6 +212,25 @@ function LibraryPlaylistContent() {
         coverUrls: [] as string[],
         tracks,
         revision: 0,
+      };
+    }
+    if (isSharedMode) {
+      if (!linkedPlaylist) return null;
+      const tracks = linkedPlaylist.tracks.map((item) => ({
+        ...item.track,
+        playlistItemId: item.sourceItemId || `zucify:${item.id}`,
+      }));
+      const coverUrls = [...new Set(tracks.map((track) => track.coverUrl).filter(Boolean))].slice(0, 4);
+      const owner = linkedPlaylist.members.find((member) => member.id === linkedPlaylist.ownerId);
+      const ownerName = owner?.displayName || owner?.username || "a friend";
+      return {
+        title: linkedPlaylist.title,
+        bio: `Shared by ${ownerName}`,
+        countLabel: t("common.tracks", { count: tracks.length }),
+        coverUrl: coverUrls[0] || "",
+        coverUrls,
+        tracks,
+        revision: tracks.length,
       };
     }
     if (!playlistDetail) return null;
@@ -238,7 +263,9 @@ function LibraryPlaylistContent() {
     let active = true;
     const refreshLinkedPlaylist = async () => {
       try {
-        const playlist = await socialApi.getLinkedPlaylist(decodedId);
+        const playlist = isSharedMode
+          ? await socialApi.getPlaylist(socialPlaylistId || "")
+          : await socialApi.getLinkedPlaylist(decodedId);
         if (!active) return;
         setLinkedPlaylist(playlist);
         setLinkStatus("linked");
@@ -247,8 +274,8 @@ function LibraryPlaylistContent() {
         if (!active) return;
         if ((error as { status?: number })?.status === 404) {
           setLinkedPlaylist(null);
-          setLinkStatus("unlinked");
-          setSocialError("");
+          setLinkStatus(isSharedMode ? "error" : "unlinked");
+          setSocialError(isSharedMode ? "This shared playlist is no longer available." : "");
         } else {
           setLinkStatus((current) => current === "linked" ? current : "error");
           setSocialError(error instanceof Error ? error.message : "Could not load playlist collaboration.");
@@ -256,6 +283,7 @@ function LibraryPlaylistContent() {
       }
     };
 
+    setLinkedPlaylist(null);
     setLinkStatus("loading");
     void refreshLinkedPlaylist();
     const interval = window.setInterval(() => {
@@ -265,7 +293,7 @@ function LibraryPlaylistContent() {
       active = false;
       window.clearInterval(interval);
     };
-  }, [decodedId, isLikesMode, socialConfigured]);
+  }, [decodedId, isLikesMode, isSharedMode, socialPlaylistId, socialConfigured]);
 
   useEffect(() => {
     if (isEditingTitle && titleRef.current) {
@@ -314,8 +342,8 @@ function LibraryPlaylistContent() {
     [decodedId, playlistDetail?.revision, sourceTracks, viewData?.title],
   );
   const linkedAddedTracks = useMemo(
-    () => isLikesMode ? [] : (linkedPlaylist?.tracks ?? []).filter((item) => !item.sourceItemId),
-    [isLikesMode, linkedPlaylist?.tracks],
+    () => isLikesMode || isSharedMode ? [] : (linkedPlaylist?.tracks ?? []).filter((item) => !item.sourceItemId),
+    [isLikesMode, isSharedMode, linkedPlaylist?.tracks],
   );
   const currentTracks = useMemo(() => [
     ...baseTracks,
@@ -330,7 +358,7 @@ function LibraryPlaylistContent() {
   }, [linkedPlaylist?.tracks]);
 
   useEffect(() => {
-    if (!linkedPlaylist || !decodedId || !playlistDetail || isLikesMode || !sourceSignature) return;
+    if (!linkedPlaylist || !decodedId || !playlistDetail || isLikesMode || isSharedMode || !sourceSignature) return;
     if (lastSyncedSourceRef.current === sourceSignature) return;
     lastSyncedSourceRef.current = sourceSignature;
     void socialApi.syncExistingPlaylist({
@@ -341,10 +369,10 @@ function LibraryPlaylistContent() {
       lastSyncedSourceRef.current = "";
       setSocialError(error instanceof Error ? error.message : "Could not sync the original playlist.");
     });
-  }, [decodedId, isLikesMode, linkedPlaylist?.id, playlistDetail, sourceSignature, sourceTracks, viewData?.title]);
+  }, [decodedId, isLikesMode, isSharedMode, linkedPlaylist?.id, playlistDetail, sourceSignature, sourceTracks, viewData?.title]);
 
   useEffect(() => {
-    if (!linkedPlaylist) {
+    if (!linkedPlaylist || isSharedMode || linkedPlaylist.ownerId !== currentUser?.id) {
       setSocialFriends([]);
       return;
     }
@@ -357,7 +385,7 @@ function LibraryPlaylistContent() {
       if (active) setSocialError(error instanceof Error ? error.message : "Could not load your friends.");
     });
     return () => { active = false; };
-  }, [linkedPlaylist?.id]);
+  }, [currentUser?.id, isSharedMode, linkedPlaylist?.id, linkedPlaylist?.ownerId]);
 
   const search = useTrackSearch(currentTracks, id);
   const searchButtonLabel = useTrackSearchButtonLabel();
@@ -406,7 +434,7 @@ function LibraryPlaylistContent() {
   const [addedToQueue, setAddedToQueue] = useState(false);
 
   const handleMakeCollaborative = useCallback(async () => {
-    if (!decodedId || !playlistDetail || !viewData || socialBusy) return;
+    if (isSharedMode || !decodedId || !playlistDetail || !viewData || socialBusy) return;
     setSocialBusy(true);
     setSocialError("");
     try {
@@ -425,10 +453,10 @@ function LibraryPlaylistContent() {
     } finally {
       setSocialBusy(false);
     }
-  }, [decodedId, lastSyncedSourceRef, playlistDetail, socialBusy, sourceSignature, sourceTracks, toast, viewData]);
+  }, [decodedId, isSharedMode, lastSyncedSourceRef, playlistDetail, socialBusy, sourceSignature, sourceTracks, toast, viewData]);
 
   const handleInviteFriend = useCallback(async () => {
-    if (!linkedPlaylist || !selectedFriendId || socialBusy) return;
+    if (!linkedPlaylist || !selectedFriendId || isSharedMode || linkedPlaylist.ownerId !== currentUser?.id || socialBusy) return;
     setSocialBusy(true);
     setSocialError("");
     try {
@@ -440,7 +468,22 @@ function LibraryPlaylistContent() {
     } finally {
       setSocialBusy(false);
     }
-  }, [decodedId, linkedPlaylist, selectedFriendId, socialBusy, toast]);
+  }, [currentUser?.id, decodedId, isSharedMode, linkedPlaylist, selectedFriendId, socialBusy, toast]);
+
+  const handleAddCurrentTrack = useCallback(async () => {
+    if (!linkedPlaylist || !currentTrack || socialBusy) return;
+    setSocialBusy(true);
+    setSocialError("");
+    try {
+      await socialApi.addTrack(linkedPlaylist.id, currentTrack);
+      setLinkedPlaylist(await socialApi.getPlaylist(linkedPlaylist.id));
+      toast("Song added to the shared playlist.", "checkmark", { description: currentTrack.title });
+    } catch (error) {
+      setSocialError(error instanceof Error ? error.message : "Could not add this song.");
+    } finally {
+      setSocialBusy(false);
+    }
+  }, [currentTrack, linkedPlaylist, socialBusy, toast]);
 
   const handleTrackReaction = useCallback(async (
     item: SharedPlaylistTrack,
@@ -797,11 +840,11 @@ function LibraryPlaylistContent() {
                   <h1
                     ref={titleRef}
                     className={`${SIDEBAR_TITLE_CLASS} ${
-                      isLikesMode
+                      isReadOnly
                         ? ""
                         : "cursor-text outline-none transition-colors"
                     } ${isEditingTitle ? "bg-border-alpha-14 rounded-[4px] -ml-[4px] px-[4px]" : ""}`}
-                      contentEditable={isLikesMode ? false : isEditingTitle}
+                      contentEditable={isReadOnly ? false : isEditingTitle}
                       suppressContentEditableWarning
                       onBlur={(e) => {
                         if (!isEditingTitle) return;
@@ -827,14 +870,16 @@ function LibraryPlaylistContent() {
                         }
                       }}
                       onClick={() => {
-                        if (!isLikesMode) setIsEditingTitle(true);
+                        if (!isReadOnly) setIsEditingTitle(true);
                       }}
                     >
                       {viewData.title}
                     </h1>
                   }
                   subtitle={
-                    isLikesMode ? undefined : viewData.bio || isEditingDescription ? (
+                    isLikesMode ? undefined : isSharedMode ? (
+                      <p className={SIDEBAR_SUBTITLE_CLASS}>{viewData.bio}</p>
+                    ) : viewData.bio || isEditingDescription ? (
                       <p
                         ref={descriptionRef}
                         className={`${SIDEBAR_SUBTITLE_CLASS} cursor-text outline-none transition-colors empty:min-h-[21px] ${
@@ -987,7 +1032,7 @@ function LibraryPlaylistContent() {
                           <Search2Line size={16} />
                         </Button>
 
-                        {!isLikesMode && (
+                        {!isReadOnly && (
                           <DropdownMenu
                             trigger={
                               <Button
@@ -1042,7 +1087,7 @@ function LibraryPlaylistContent() {
                           {linkStatus === "loading" && !linkedPlaylist && (
                             <p className="m-0 text-[11px] text-text-tertiary">Checking playlist collaboration…</p>
                           )}
-                          {linkStatus === "unlinked" && (
+                          {linkStatus === "unlinked" && !isSharedMode && (
                             <Button variant="outline" onClick={() => void handleMakeCollaborative()} disabled={socialBusy || !playlistDetail} className="!h-[34px] w-full !text-[12px]">
                               {socialBusy ? "Preparing playlist…" : "Make collaborative"}
                             </Button>
@@ -1050,9 +1095,11 @@ function LibraryPlaylistContent() {
                           {linkedPlaylist && (
                             <>
                               <p className="m-0 text-[12px] font-medium text-text-primary">
-                                Collaborative · {linkedPlaylist.members.length} member{linkedPlaylist.members.length === 1 ? "" : "s"}
+                                {isSharedMode
+                                  ? `Shared by ${socialPersonName(linkedPlaylist.members.find((member) => member.id === linkedPlaylist.ownerId), currentUser?.id)} · ${linkedPlaylist.members.length} member${linkedPlaylist.members.length === 1 ? "" : "s"}`
+                                  : `Collaborative · ${linkedPlaylist.members.length} member${linkedPlaylist.members.length === 1 ? "" : "s"}`}
                               </p>
-                              {socialFriends.length > 0 ? (
+                              {!isSharedMode && linkedPlaylist.ownerId === currentUser?.id && socialFriends.length > 0 ? (
                                 <div className="flex gap-[6px]">
                                   <select
                                     value={selectedFriendId}
@@ -1073,10 +1120,19 @@ function LibraryPlaylistContent() {
                                     className="!h-[34px] shrink-0 !px-[9px] !text-[11px]"
                                   >Invite</Button>
                                 </div>
-                              ) : (
+                              ) : !isSharedMode && linkedPlaylist.ownerId === currentUser?.id ? (
                                 <p className="m-0 text-[11px] text-text-tertiary">Add friends in Friends to invite them here.</p>
+                              ) : null}
+                              {currentTrack && (
+                                <Button variant="outline" onClick={() => void handleAddCurrentTrack()} disabled={socialBusy} className="!h-[32px] w-full !text-[11px]">
+                                  Add current song
+                                </Button>
                               )}
-                              <p className="m-0 text-[10px] leading-[1.4] text-text-tertiary">Friend-added songs play here; your Liner playlist stays owner-managed.</p>
+                              <p className="m-0 text-[10px] leading-[1.4] text-text-tertiary">
+                                {isSharedMode
+                                  ? "Songs friends add live in Zucify and play from this shared playlist."
+                                  : "Friend-added songs play here; your Liner playlist stays owner-managed."}
+                              </p>
                             </>
                           )}
                           {socialError && <p role="alert" className="m-0 text-[11px] text-red-400">{socialError}</p>}
@@ -1190,6 +1246,7 @@ function LibraryPlaylistContent() {
                       socialTrack={socialTrack}
                       addedByName={addedByName}
                       isSocialAdded={isSocialAdded}
+                      socialOnly={isSharedMode}
                       reactionDisabled={socialBusy}
                       onReaction={handleTrackReaction}
                       highlight={search.activeQuery || undefined}

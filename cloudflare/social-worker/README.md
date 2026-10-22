@@ -4,6 +4,8 @@ This Cloudflare Worker stores friend requests, messages, shared playlists, per-s
 
 An existing Liner playlist can be made collaborative from its playlist page. The Worker stores a linked snapshot keyed by the original playlist ID, so songs friends add, their attribution, and reactions show in that same Zucify view. The original playlist continues to belong to its Liner owner; songs added by friends are stored in this Worker collaboration layer and are not written into Liner automatically. The owner can invite accepted friends from the playlist sidebar. Linked playlists support up to 1,000 tracks.
 
+Invited members see the shared playlist in their Zucify Library and open a social-backed playlist view, even when the original Liner playlist is not in their account.
+
 ## Deploy to your Cloudflare account
 
 Wrangler must be logged in (`pnpm dlx wrangler login` if needed).
