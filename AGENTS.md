@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-`src/` contains the React renderer: route setup is in `src/app/`, product areas live under `src/features/`, reusable contracts and utilities under `src/shared/`, and static media under `src/assets/`. `electron/` holds the desktop main process, preload bridges, and IPC features. The optional native addon is in `native/snap-preview/`; `signer/` contains signer sources, while `scripts/` holds build helpers. Put tests beside the code they cover as `*.test.ts` or `*.test.tsx`.
+`src/` contains the React renderer: route setup is in `src/app/`, product areas live under `src/features/`, reusable contracts and utilities under `src/shared/`, and static media under `src/assets/`. `electron/` holds the desktop main process, preload bridges, and IPC features. The optional native addon is in `native/snap-preview/`; `cloudflare/social-worker/` contains the Friends service and D1 migrations; `signer/` contains signer sources, while `scripts/` holds build helpers. Put tests beside the code they cover as `*.test.ts` or `*.test.tsx`.
 
 ## Build, Test, and Development Commands
 
@@ -20,7 +20,7 @@ Follow the existing TypeScript and React patterns: two-space indentation, double
 
 ## Testing Guidelines
 
-Vitest runs tests in `jsdom` and includes `src/**/*.test.ts(x)` and `electron/**/*.test.ts`. Name tests after the module or behavior they cover, and add focused cases for changed behavior. Run `pnpm test` before submitting; run `pnpm build` when a change affects TypeScript or bundling.
+Vitest runs tests in `jsdom` and includes renderer, Electron, and `cloudflare/social-worker/src/**/*.test.ts` tests. Name tests after the module or behavior they cover, and add focused cases for changed behavior. Run `pnpm test` before submitting; run `pnpm build` when a change affects TypeScript or bundling.
 
 ## Commit & Pull Request Guidelines
 

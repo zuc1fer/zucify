@@ -9,6 +9,7 @@ export interface ListeningRoomSnapshot {
   hostId: string;
   userId: string;
   sharedPlaylistId?: string | null;
+  playlistTrackIds?: string[];
   partyType?: "song" | "playlist" | "friends";
   status: string;
   connected: boolean;
@@ -27,6 +28,7 @@ interface RoomRuntime {
   playlistTitle: string;
   playlistCoverUrl: string;
   previousShuffle: boolean | null;
+  previousRepeat: import("@/features/player/store/playerStore").RepeatMode | null;
   lastHostState: RoomState | null;
   initialStateApplied: boolean;
   status: string;
@@ -52,12 +54,25 @@ function publish(room: RoomRuntime, update: Partial<ListeningRoomSnapshot> = {})
     hostId: room.hostId,
     userId: room.userId,
     sharedPlaylistId: room.sharedPlaylistId,
+    playlistTrackIds: room.partyType === "playlist" ? room.playlistTracks.map((track) => track.id) : undefined,
     partyType: room.partyType,
     status: room.status,
     connected: room.socket?.readyState === WebSocket.OPEN || room.socket?.readyState === WebSocket.CONNECTING || room.connecting,
     ...update,
   };
   for (const listener of listeners) listener(snapshot);
+}
+
+function updatePlaybackLock(room: RoomRuntime | null): void {
+  usePlayerStore.getState().setPlaybackControlLocked(Boolean(
+    room?.partyType === "friends" && room.hostId !== room.userId,
+  ));
+}
+
+function clearPlaybackPolicy(): void {
+  const store = usePlayerStore.getState();
+  store.setPlaybackQueueSnapshot(null);
+  store.setPlaybackControlLocked(false);
 }
 
 function currentPlayback(): LocalPlayback {
@@ -83,7 +98,9 @@ function finishRuntime(room: RoomRuntime, status: string): void {
   if (activeRoom !== room) return;
   publish(room, { status, ended: true, connected: false });
   closeRuntime(room);
+  clearPlaybackPolicy();
   if (room.previousShuffle !== null) playerEngine.setShuffle(room.previousShuffle);
+  if (room.previousRepeat !== null) playerEngine.setRepeat(room.previousRepeat);
   activeRoom = null;
 }
 
@@ -106,7 +123,7 @@ function schedulePauseAfterLoad(room: RoomRuntime, trackId: string): void {
     if (next.currentTrack?.id !== trackId || next.status === "error") {
       cleanup();
     } else if (next.status === "playing") {
-      playerEngine.pause();
+      playerEngine.pause(true);
       room.lastLocal = currentPlayback();
       cleanup();
     }
@@ -132,13 +149,16 @@ async function applyState(room: RoomRuntime, state: RoomState): Promise<void> {
       await playerEngine.playTrack(
         state.track,
         playbackQueue(room, state.track),
-        room.sharedPlaylistId ? `shared:${room.sharedPlaylistId}` : undefined,
+        room.sharedPlaylistId ? `shared:${room.sharedPlaylistId}` : null,
         room.playlistCoverUrl || undefined,
+        undefined,
+        false,
+        true,
       );
       room.initialStateApplied = true;
     }
     const current = usePlayerStore.getState();
-    if (Math.abs(current.positionMs - state.positionMs) > 1500) playerEngine.seek(state.positionMs);
+    if (Math.abs(current.positionMs - state.positionMs) > 1500) playerEngine.seek(state.positionMs, false, true);
     if (state.status === "playing" && room.pendingPauseTrackId === state.track.id) {
       room.unsubscribePendingPause?.();
       room.unsubscribePendingPause = null;
@@ -147,9 +167,9 @@ async function applyState(room: RoomRuntime, state: RoomState): Promise<void> {
     if (state.status === "paused" && current.status === "loading") {
       schedulePauseAfterLoad(room, state.track.id);
     } else if (state.status === "paused" && current.status === "playing") {
-      playerEngine.pause();
+      playerEngine.pause(true);
     } else if (state.status === "playing" && current.status === "paused") {
-      playerEngine.resume();
+      playerEngine.resume(true);
     }
   } finally {
     room.lastHostState = state;
@@ -165,15 +185,18 @@ async function applyControl(room: RoomRuntime, action: any): Promise<void> {
       await playerEngine.playTrack(
         action.track,
         playbackQueue(room, action.track),
-        room.sharedPlaylistId ? `shared:${room.sharedPlaylistId}` : undefined,
+        room.sharedPlaylistId ? `shared:${room.sharedPlaylistId}` : null,
         room.playlistCoverUrl || undefined,
+        undefined,
+        false,
+        true,
       );
     } else if (action?.type === "pause") {
-      playerEngine.pause();
+      playerEngine.pause(true);
     } else if (action?.type === "resume") {
-      playerEngine.resume();
+      playerEngine.resume(true);
     } else if (action?.type === "seek" && Number.isFinite(action.positionMs)) {
-      playerEngine.seek(action.positionMs);
+      playerEngine.seek(action.positionMs, false, true);
     }
   } finally {
     window.setTimeout(() => { room.remoteApplying = false; }, 900);
@@ -291,6 +314,7 @@ export function getListeningRoom(): ListeningRoomSnapshot | null {
     hostId: activeRoom.hostId,
     userId: activeRoom.userId,
     sharedPlaylistId: activeRoom.sharedPlaylistId,
+    playlistTrackIds: activeRoom.partyType === "playlist" ? activeRoom.playlistTracks.map((track) => track.id) : undefined,
     partyType: activeRoom.partyType,
     status: activeRoom.status,
     connected: activeRoom.socket?.readyState === WebSocket.OPEN || activeRoom.socket?.readyState === WebSocket.CONNECTING || activeRoom.connecting,
@@ -314,6 +338,7 @@ export async function connectListeningRoom(
     activeRoom.hostId = session.hostId;
     activeRoom.sharedPlaylistId = session.sharedPlaylistId ?? activeRoom.sharedPlaylistId;
     activeRoom.partyType = session.partyType ?? activeRoom.partyType;
+    updatePlaybackLock(activeRoom);
     await openRuntime(activeRoom);
     return;
   }
@@ -321,7 +346,9 @@ export async function connectListeningRoom(
     const previous = activeRoom;
     try { await socialApi.leaveSession(previous.sessionId); } catch {}
     closeRuntime(previous);
+    clearPlaybackPolicy();
     if (previous.previousShuffle !== null) playerEngine.setShuffle(previous.previousShuffle);
+    if (previous.previousRepeat !== null) playerEngine.setRepeat(previous.previousRepeat);
     activeRoom = null;
   }
   const room: RoomRuntime = {
@@ -334,6 +361,7 @@ export async function connectListeningRoom(
     playlistTitle: "",
     playlistCoverUrl: "",
     previousShuffle: null,
+    previousRepeat: null,
     lastHostState: null,
     initialStateApplied: false,
     status: "Connecting to the listening room…",
@@ -350,17 +378,21 @@ export async function connectListeningRoom(
   activeRoom = room;
   if (room.partyType === "playlist" && room.sharedPlaylistId) {
     try {
-      const playlist = await socialApi.getPlaylist(room.sharedPlaylistId);
-      room.playlistTracks = playlist.tracks.map((item) => item.track);
+      const playlist = await socialApi.getSessionQueue(room.sessionId);
+      room.playlistTracks = playlist.tracks;
       room.playlistTitle = playlist.title;
       room.playlistCoverUrl = room.playlistTracks.find((track) => track.coverUrl)?.coverUrl ?? "";
       room.previousShuffle = usePlayerStore.getState().shuffle;
+      room.previousRepeat = usePlayerStore.getState().repeat;
       playerEngine.setShuffle(false);
+      playerEngine.setRepeat("off");
+      usePlayerStore.getState().setPlaybackQueueSnapshot(room.playlistTracks);
     } catch (error) {
       activeRoom = null;
       throw error;
     }
   }
+  updatePlaybackLock(room);
   await openRuntime(room);
 }
 
@@ -369,7 +401,9 @@ export function closeListeningRoomConnection(sessionId?: string): void {
   if (!room || (sessionId && room.sessionId !== sessionId)) return;
   publish(room, { status: "Connection closed. Reconnect within one minute.", connected: false, disconnected: true });
   closeRuntime(room);
+  clearPlaybackPolicy();
   if (room.previousShuffle !== null) playerEngine.setShuffle(room.previousShuffle);
+  if (room.previousRepeat !== null) playerEngine.setRepeat(room.previousRepeat);
   activeRoom = null;
 }
 

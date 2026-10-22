@@ -12,6 +12,7 @@ import { useTouchBarSync } from "@/features/touchbar";
 import { useOverlaySync } from "@/features/overlay";
 import { useDiscordSync } from "@/features/discord";
 import { AppRoutes } from "./routes";
+import PlaylistPresenceSync from "@/features/friends/ui/PlaylistPresenceSync";
 import DeeplinkHandler from "./DeeplinkHandler";
 import EnvironmentWarning from "./EnvironmentWarning";
 import { ConnectivityWall } from "@/features/connectivity";
@@ -75,6 +76,7 @@ export default function App() {
                   <EnvironmentWarning />
                   <ConnectivityWall />
                   <AuthLock>
+                    <PlaylistPresenceSync />
                     <AppRoutes />
                   </AuthLock>
                 </WindowAnimationContainer>

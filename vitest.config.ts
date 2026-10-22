@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: false,
-    include: ["src/**/*.test.ts", "src/**/*.test.tsx", "electron/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx", "electron/**/*.test.ts", "cloudflare/social-worker/src/**/*.test.ts"],
   },
   resolve: {
     alias: {

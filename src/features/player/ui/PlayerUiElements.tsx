@@ -70,6 +70,8 @@ export function PlayerUiElements({
   const player = usePlayerState();
 
   const track = player.currentTrack;
+  const playbackControlLocked = player.playbackControlLocked;
+  const playlistQueueLocked = Boolean(player.playbackQueueSnapshot);
   const coverUrl = track?.coverUrl || "";
   const trackTitle = track?.title || "";
   const trackArtists = track?.artists || "";
@@ -198,6 +200,7 @@ export function PlayerUiElements({
         positionMs={player.positionMs}
         durationMs={player.durationMs}
         onSeek={(pos) => playerEngine.seek(pos)}
+        disabled={playbackControlLocked}
         showTime
         size="md"
         className="w-[320px]"
@@ -205,11 +208,14 @@ export function PlayerUiElements({
 
       {/* Primary Playback Controls */}
       <div className="flex items-center gap-[14px]">
+        {playbackControlLocked && <span className="text-[10px] text-white/55">Following host</span>}
         <button
           type="button"
           aria-label={player.shuffle ? t("player.shuffle_on") : t("player.shuffle_off")}
+          title={playbackControlLocked ? "Playback is controlled by the host" : playlistQueueLocked ? "The party playlist order is fixed" : undefined}
+          disabled={playbackControlLocked || playlistQueueLocked}
           onClick={() => playerEngine.setShuffle(!player.shuffle)}
-          className={`${iconButtonClass} ${
+          className={`${iconButtonClass} disabled:cursor-not-allowed disabled:opacity-30 ${
             player.shuffle ? "!text-white !opacity-100" : "!text-white/40"
           }`}
         >
@@ -219,17 +225,21 @@ export function PlayerUiElements({
         <button
           type="button"
           aria-label="Previous track"
+          title={playbackControlLocked ? "Playback is controlled by the host" : undefined}
+          disabled={playbackControlLocked}
           onClick={() => void playerEngine.skipPrevious()}
-          className={iconButtonClass}
+          className={`${iconButtonClass} disabled:cursor-not-allowed disabled:opacity-30`}
         >
           <SkipPrevious size={20} weight="Bold" />
         </button>
 
         <button
           type="button"
-          aria-label={player.status === "playing" ? "Pause" : "Play"}
+          aria-label={playbackControlLocked ? "Following the host" : player.status === "playing" ? "Pause" : "Play"}
+          title={playbackControlLocked ? "Playback is controlled by the host" : undefined}
+          disabled={playbackControlLocked}
           onClick={() => void playerEngine.togglePlayPause()}
-          className="inline-flex h-[36px] w-[36px] items-center justify-center text-white opacity-85 transition-all duration-150 ease-out hover:opacity-100 active:scale-[0.94] shrink-0 border-none bg-transparent cursor-pointer"
+          className="inline-flex h-[36px] w-[36px] items-center justify-center text-white opacity-85 transition-all duration-150 ease-out hover:opacity-100 active:scale-[0.94] shrink-0 border-none bg-transparent cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
         >
           <PlayPauseIcon status={player.status} />
         </button>
@@ -237,8 +247,10 @@ export function PlayerUiElements({
         <button
           type="button"
           aria-label="Next track"
+          title={playbackControlLocked ? "Playback is controlled by the host" : undefined}
+          disabled={playbackControlLocked}
           onClick={() => void playerEngine.skipNext()}
-          className={iconButtonClass}
+          className={`${iconButtonClass} disabled:cursor-not-allowed disabled:opacity-30`}
         >
           <SkipNext size={20} weight="Bold" />
         </button>
@@ -246,13 +258,15 @@ export function PlayerUiElements({
         <button
           type="button"
           aria-label="Repeat"
+          title={playbackControlLocked ? "Playback is controlled by the host" : playlistQueueLocked ? "The party playlist order is fixed" : undefined}
+          disabled={playbackControlLocked || playlistQueueLocked}
           onClick={() =>
             playerEngine.setRepeat(
               // radio has no repeat-all: it refills instead of looping
               nextRepeatMode(player.repeat, isRadioContext(player.playbackContext)),
             )
           }
-          className={`${iconButtonClass} ${
+          className={`${iconButtonClass} disabled:cursor-not-allowed disabled:opacity-30 ${
             player.repeat !== "off" ? "!text-white !opacity-100" : "!text-white/40"
           }`}
         >

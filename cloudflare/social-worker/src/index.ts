@@ -15,6 +15,7 @@ const ROOM_RECONNECT_GRACE_MS = 60_000;
 const MAX_PLAYLIST_TRACKS = 250;
 const MAX_LINKED_PLAYLIST_TRACKS = 1000;
 const MAX_PLAYLIST_MEMBERS = 25;
+const PLAYLIST_PRESENCE_TTL_MS = 60_000;
 const TRACK_REACTION_EMOJIS = new Set(["❤️", "🔥", "😍", "😂", "👏"]);
 
 const corsHeaders = {
@@ -212,7 +213,7 @@ async function playlists(env: Env, userId: string, sourcePlaylistId?: string, pl
   ).bind(userId, sourcePlaylistId ?? null, sourcePlaylistId ?? null, playlistId ?? null, playlistId ?? null).all();
   const items = [];
   for (const row of result.results ?? []) {
-    const [members, tracks, reactionRows] = await Promise.all([
+    const [members, tracks, reactionRows, listenerRows] = await Promise.all([
       env.DB.prepare(
         `SELECT u.id, u.username, u.display_name AS displayName, u.avatar_url AS avatarUrl
          FROM shared_playlist_members m LEFT JOIN social_users u ON u.id = m.user_id
@@ -231,6 +232,16 @@ async function playlists(env: Env, userId: string, sourcePlaylistId?: string, pl
            MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) AS reactedByMe
          FROM shared_playlist_track_reactions WHERE playlist_id = ? GROUP BY track_id, emoji`,
       ).bind(userId, row.id).all(),
+      env.DB.prepare(
+        `SELECT presence.user_id AS userId, presence.track_id AS trackId,
+           presence.status, presence.updated_at AS updatedAt,
+           u.username, u.display_name AS displayName, u.avatar_url AS avatarUrl
+         FROM shared_playlist_presence presence
+         JOIN shared_playlist_members membership
+           ON membership.playlist_id = presence.playlist_id AND membership.user_id = presence.user_id
+         LEFT JOIN social_users u ON u.id = presence.user_id
+         WHERE presence.playlist_id = ? AND presence.user_id != ? AND presence.updated_at > ?`,
+      ).bind(row.id, userId, Date.now() - PLAYLIST_PRESENCE_TTL_MS).all(),
     ]);
     const reactionsByTrack = new Map<string, { emoji: string; count: number; reactedByMe: boolean }[]>();
     for (const reaction of reactionRows.results ?? []) {
@@ -241,6 +252,18 @@ async function playlists(env: Env, userId: string, sourcePlaylistId?: string, pl
     items.push({
       ...row,
       members: members.results ?? [],
+      listeners: (listenerRows.results ?? []).map((listener: any) => ({
+        userId: listener.userId,
+        trackId: listener.trackId,
+        status: listener.status === "paused" ? "paused" : "playing",
+        updatedAt: Number(listener.updatedAt),
+        user: {
+          id: listener.userId,
+          username: listener.username,
+          displayName: listener.displayName,
+          avatarUrl: listener.avatarUrl,
+        },
+      })),
       tracks: (tracks.results ?? []).map((track: any) => ({
         id: track.id, addedBy: track.addedBy, sourceItemId: track.sourceItemId,
         createdAt: track.createdAt, track: safeParse(track.trackJson),
@@ -255,6 +278,31 @@ async function playlists(env: Env, userId: string, sourcePlaylistId?: string, pl
     });
   }
   return json({ items });
+}
+
+async function setPlaylistPresence(env: Env, user: SocialUser, playlistId: string, request: Request): Promise<Response> {
+  const denied = await requirePlaylistMember(env, playlistId, user.id);
+  if (denied) return denied;
+  const body = await request.json().catch(() => null) as any;
+  if (body === null) {
+    await env.DB.prepare("DELETE FROM shared_playlist_presence WHERE playlist_id=? AND user_id=?")
+      .bind(playlistId, user.id).run();
+    return json({ ok: true });
+  }
+  const trackId = string(body?.trackId, 300);
+  const status = body?.status === "paused" ? "paused" : body?.status === "playing" ? "playing" : null;
+  if (!trackId || !status) return error("Choose a valid playlist song and playback status.");
+  const track = await env.DB.prepare(
+    "SELECT 1 AS ok FROM shared_playlist_tracks WHERE playlist_id=? AND json_extract(track_json, '$.id')=? LIMIT 1",
+  ).bind(playlistId, trackId).first();
+  if (!track) return error("That song is not in this shared playlist.", 404);
+  await env.DB.prepare(
+    `INSERT INTO shared_playlist_presence (playlist_id, user_id, track_id, status, updated_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(playlist_id, user_id) DO UPDATE SET
+       track_id=excluded.track_id, status=excluded.status, updated_at=excluded.updated_at`,
+  ).bind(playlistId, user.id, trackId, status, Date.now()).run();
+  return json({ ok: true });
 }
 
 async function listeningSessions(env: Env, userId: string): Promise<Response> {
@@ -390,10 +438,14 @@ async function createPlaylistParty(env: Env, user: SocialUser, playlistId: strin
   if (!inviteeIds.length) return error("Invite a friend to this shared playlist before starting a party.");
   if (inviteeIds.length > 49) return error("A playlist party can have up to 50 members.", 413);
 
-  const firstTrackRow = await env.DB.prepare(
-    "SELECT track_json AS trackJson FROM shared_playlist_tracks WHERE playlist_id = ? ORDER BY position, created_at LIMIT 1",
-  ).bind(playlistId).first() as any;
-  const track = firstTrackRow ? parseTrack(safeParse(firstTrackRow.trackJson)) : null;
+  const playlistTrackRows = await env.DB.prepare(
+    "SELECT track_json AS trackJson FROM shared_playlist_tracks WHERE playlist_id = ? ORDER BY position, created_at LIMIT ?",
+  ).bind(playlistId, MAX_LINKED_PLAYLIST_TRACKS).all();
+  const queue = (playlistTrackRows.results ?? []).flatMap((row: any) => {
+    const track = parseTrack(safeParse(row.trackJson));
+    return track ? [track] : [];
+  });
+  const track = queue[0];
   if (!track) return error("Add a song to this shared playlist before starting a party.");
 
   const id = crypto.randomUUID();
@@ -411,6 +463,13 @@ async function createPlaylistParty(env: Env, user: SocialUser, playlistId: strin
     ).bind(id, memberId, now)),
   ];
   await env.DB.batch(memberRows);
+  for (let offset = 0; offset < queue.length; offset += 100) {
+    await env.DB.batch(queue.slice(offset, offset + 100).map((item, position) =>
+      env.DB.prepare(
+        "INSERT INTO listening_session_tracks (session_id, position, track_id, track_json) VALUES (?, ?, ?, ?)",
+      ).bind(id, offset + position, item.id, JSON.stringify(item)),
+    ));
+  }
   return json({
     id, hostId: user.id, guestId, track, sharedPlaylistId: playlistId,
     partyType: "playlist", playlistTitle: playlist?.title ?? "Shared playlist",
@@ -438,6 +497,18 @@ async function handleApi(request: Request, env: Env, user: SocialUser): Promise<
   if (method === "GET" && path === "/api/people") return searchPeople(env, user.id, url.searchParams.get("q"));
   if (method === "GET" && path === "/api/requests") return requests(env, user.id);
   if (method === "GET" && path === "/api/playlists") return playlists(env, user.id);
+  const playlistPresencePath = path.match(/^\/api\/playlists\/([^/]+)\/presence$/);
+  if (method === "POST" && playlistPresencePath) {
+    return setPlaylistPresence(env, user, decodeURIComponent(playlistPresencePath[1]), request);
+  }
+  const sourcePresencePath = path.match(/^\/api\/playlists\/source\/([^/]+)\/presence$/);
+  if (method === "POST" && sourcePresencePath) {
+    const sourcePlaylistId = decodeURIComponent(sourcePresencePath[1]);
+    const linked = await env.DB.prepare("SELECT id FROM shared_playlists WHERE source_playlist_id=?")
+      .bind(sourcePlaylistId).first() as any;
+    if (!linked) return error("That playlist is not collaborative yet.", 404);
+    return setPlaylistPresence(env, user, linked.id, request);
+  }
   const playlistPartyPath = path.match(/^\/api\/playlists\/([^/]+)\/sessions$/);
   if (method === "POST" && playlistPartyPath) {
     return createPlaylistParty(env, user, decodeURIComponent(playlistPartyPath[1]));
@@ -459,6 +530,54 @@ async function handleApi(request: Request, env: Env, user: SocialUser): Promise<
     return playlist ? json(playlist) : error("That shared playlist was not found.", 404);
   }
   if (method === "GET" && path === "/api/sessions") return listeningSessions(env, user.id);
+
+  const sessionQueuePath = path.match(/^\/api\/sessions\/([^/]+)\/queue$/);
+  if (method === "GET" && sessionQueuePath) {
+    const sessionId = decodeURIComponent(sessionQueuePath[1]);
+    const session = await env.DB.prepare(
+      `SELECT s.party_type AS partyType, s.shared_playlist_id AS sharedPlaylistId,
+         p.title AS title, s.status
+       FROM listening_sessions s LEFT JOIN shared_playlists p ON p.id=s.shared_playlist_id
+       WHERE s.id=?`,
+    ).bind(sessionId).first() as any;
+    const member = await env.DB.prepare(
+      "SELECT 1 AS ok FROM listening_session_members WHERE session_id=? AND user_id=? AND status='active'",
+    ).bind(sessionId, user.id).first();
+    if (!session || session.status === "ended" || session.partyType !== "playlist" || !member) {
+      return error("That playlist party is not available to you.", 404);
+    }
+    let snapshotRows = await env.DB.prepare(
+      "SELECT track_json AS trackJson FROM listening_session_tracks WHERE session_id=? ORDER BY position",
+    ).bind(sessionId).all();
+    if (!(snapshotRows.results ?? []).length) {
+      // Older sessions created before queue snapshots existed keep a stable queue
+      // from the first member who reconnects after this version is deployed.
+      const currentRows = await env.DB.prepare(
+        "SELECT track_json AS trackJson FROM shared_playlist_tracks WHERE playlist_id=? ORDER BY position, created_at LIMIT ?",
+      ).bind(session.sharedPlaylistId, MAX_LINKED_PLAYLIST_TRACKS).all();
+      const queue = (currentRows.results ?? []).flatMap((row: any) => {
+        const track = parseTrack(safeParse(row.trackJson));
+        return track ? [track] : [];
+      });
+      for (let offset = 0; offset < queue.length; offset += 100) {
+        await env.DB.batch(queue.slice(offset, offset + 100).map((item, position) =>
+          env.DB.prepare(
+            "INSERT OR IGNORE INTO listening_session_tracks (session_id, position, track_id, track_json) VALUES (?, ?, ?, ?)",
+          ).bind(sessionId, offset + position, item.id, JSON.stringify(item)),
+        ));
+      }
+      snapshotRows = await env.DB.prepare(
+        "SELECT track_json AS trackJson FROM listening_session_tracks WHERE session_id=? ORDER BY position",
+      ).bind(sessionId).all();
+    }
+    return json({
+      title: session.title ?? "Shared playlist",
+      tracks: (snapshotRows.results ?? []).flatMap((row: any) => {
+        const track = parseTrack(safeParse(row.trackJson));
+        return track ? [track] : [];
+      }),
+    });
+  }
 
   if (method === "POST" && path === "/api/requests") {
     const body = await request.json().catch(() => null) as any;
@@ -720,28 +839,6 @@ async function handleApi(request: Request, env: Env, user: SocialUser): Promise<
       partyType: "friends", memberCount: 1, myStatus: "active", status: "active",
       createdAt: now, updatedAt: now,
     }, 201);
-  }
-
-  if (method === "POST" && path === "/api/sessions") {
-    const body = await request.json().catch(() => null) as any;
-    const guestId = string(body?.guestId, 300);
-    const track = parseTrack(body?.track);
-    if (!guestId || !track) return error("Choose a friend and a song to start listening together.");
-    const denied = await requireFriend(env, user.id, guestId);
-    if (denied) return denied;
-    const id = crypto.randomUUID();
-    const now = Date.now();
-    const positionMs = Number.isFinite(body?.positionMs) ? Math.max(0, Math.min(Number(body.positionMs), 24 * 60 * 60 * 1000)) : 0;
-    const playbackStatus = body?.playbackStatus === "paused" ? "paused" : "playing";
-    await env.DB.prepare(
-      `INSERT INTO listening_sessions (id, host_id, guest_id, track_json, position_ms, playback_status, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'waiting', ?, ?)`,
-    ).bind(id, user.id, guestId, JSON.stringify(track), positionMs, playbackStatus, now, now).run();
-    await env.DB.batch([
-      env.DB.prepare("INSERT INTO listening_session_members (session_id, user_id, status, created_at) VALUES (?, ?, 'active', ?)").bind(id, user.id, now),
-      env.DB.prepare("INSERT INTO listening_session_members (session_id, user_id, status, created_at) VALUES (?, ?, 'invited', ?)").bind(id, guestId, now),
-    ]);
-    return json({ id, hostId: user.id, guestId, track, positionMs, playbackStatus, status: "waiting", createdAt: now }, 201);
   }
 
   const joinPath = path.match(/^\/api\/sessions\/([^/]+)\/join$/);
@@ -1038,6 +1135,18 @@ export class ListeningRoom {
     const positionMs = Number.isFinite(event.positionMs) ? Math.max(0, Math.min(Number(event.positionMs), 24 * 60 * 60 * 1000)) : 0;
     const status = event.status === "paused" ? "paused" : "playing";
     if (!track) return;
+    if (session.partyType === "playlist") {
+      const included = await this.env.DB.prepare(
+        "SELECT 1 AS ok FROM listening_session_tracks WHERE session_id=? AND track_id=?",
+      ).bind(attachment.sessionId, track.id).first();
+      if (!included) {
+        const current = await this.state.storage.get("snapshot");
+        if (current) {
+          try { socket.send(JSON.stringify({ type: "state", ...current })); } catch {}
+        }
+        return;
+      }
+    }
     const snapshot = {
       hostId: session.host_id, track, positionMs, status,
       sharedPlaylistId: session.sharedPlaylistId ?? null,

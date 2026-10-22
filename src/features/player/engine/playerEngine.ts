@@ -411,8 +411,15 @@ class PlayerEngine {
     contextCover?: string | null,
     queueIndex?: number,
     preserveQueue?: boolean,
+    fromRoom: boolean = false,
   ): Promise<void> {
     const store = usePlayerStore.getState();
+    if (store.playbackControlLocked && !fromRoom) return;
+    if (store.playbackQueueSnapshot) {
+      if (!fromRoom && !store.playbackQueueSnapshot.some((item) => item.id === track.id)) return;
+      queue = store.playbackQueueSnapshot;
+      queueIndex = undefined;
+    }
     const nextQueue = this.normalizeQueue(queue ?? [track], track);
     const nextIndex =
       queueIndex !== undefined
@@ -480,7 +487,10 @@ class PlayerEngine {
     context?: string | null,
     contextCover?: string | null,
     startIndex?: number,
+    fromRoom: boolean = false,
   ): Promise<void> {
+    const state = usePlayerStore.getState();
+    if ((state.playbackControlLocked && !fromRoom) || state.playbackQueueSnapshot) return;
     if (!tracks || tracks.length === 0) return;
     const store = usePlayerStore.getState();
     const seedIndex =
@@ -580,8 +590,9 @@ class PlayerEngine {
     }
   }
 
-  public pause(): void {
+  public pause(fromRoom: boolean = false): void {
     const store = usePlayerStore.getState();
+    if (store.playbackControlLocked && !fromRoom) return;
     const wasLoading = store.status === "loading";
     if (wasLoading) {
       playerRuntime?.cancelPendingLoad();
@@ -596,8 +607,9 @@ class PlayerEngine {
     }
   }
 
-  public resume(): void {
+  public resume(fromRoom: boolean = false): void {
     const store = usePlayerStore.getState();
+    if (store.playbackControlLocked && !fromRoom) return;
     if (playerRuntime) {
       if (
         store.currentTrack &&
@@ -611,16 +623,18 @@ class PlayerEngine {
     }
   }
 
-  public togglePlayPause(): void {
+  public togglePlayPause(fromRoom: boolean = false): void {
+    if (usePlayerStore.getState().playbackControlLocked && !fromRoom) return;
     const store = usePlayerStore.getState();
     if (store.status === "playing" || store.status === "loading") {
-      this.pause();
+      this.pause(fromRoom);
     } else {
-      this.resume();
+      this.resume(fromRoom);
     }
   }
 
-  public async skipNext(isAutoEnd: boolean = false): Promise<void> {
+  public async skipNext(isAutoEnd: boolean = false, fromRoom: boolean = false): Promise<void> {
+    if (usePlayerStore.getState().playbackControlLocked && !fromRoom) return;
     const store = usePlayerStore.getState();
     const nextIndex = this.computeNextIndex(isAutoEnd);
 
@@ -636,7 +650,7 @@ class PlayerEngine {
       await this.appendSimilarTracksForSeed(waitSession, store.currentTrack.id);
       if (waitSession !== this.sessionId) return;
       if (usePlayerStore.getState().queue.length > lengthBefore) {
-        await this.skipNext(isAutoEnd);
+        await this.skipNext(isAutoEnd, fromRoom);
         return;
       }
     }
@@ -668,13 +682,14 @@ class PlayerEngine {
     }
   }
 
-  public async skipPrevious(): Promise<void> {
+  public async skipPrevious(fromRoom: boolean = false): Promise<void> {
+    if (usePlayerStore.getState().playbackControlLocked && !fromRoom) return;
     const store = usePlayerStore.getState();
     if (store.queue.length === 0) return;
 
     // If playback is > 3 seconds, standard player behavior restarts the track
     if (store.positionMs > 3000) {
-      this.seek(0);
+      this.seek(0, false, fromRoom);
       return;
     }
 
@@ -763,10 +778,14 @@ class PlayerEngine {
   }
 
   public setRepeat(mode: RepeatMode): void {
+    const state = usePlayerStore.getState();
+    if (state.playbackControlLocked || state.playbackQueueSnapshot) return;
     usePlayerStore.getState().setRepeat(mode);
   }
 
   public setShuffle(enabled: boolean): void {
+    const state = usePlayerStore.getState();
+    if (state.playbackControlLocked || state.playbackQueueSnapshot) return;
     const store = usePlayerStore.getState();
     if (store.shuffle === enabled) return;
     store.setShuffle(enabled);
@@ -796,8 +815,9 @@ class PlayerEngine {
     }
   }
 
-  public seek(positionMs: number, autoPlay: boolean = false): void {
+  public seek(positionMs: number, autoPlay: boolean = false, fromRoom: boolean = false): void {
     const store = usePlayerStore.getState();
+    if (store.playbackControlLocked && !fromRoom) return;
     const currentMs = store.positionMs;
     const durationMs = store.durationMs || store.currentTrack?.durationMs || 0;
     const nextMs = Math.round(
@@ -828,17 +848,18 @@ class PlayerEngine {
       }
       playerRuntime.seek(nextMs);
       if (autoPlay && store.status !== "playing") {
-        this.resume();
+        this.resume(fromRoom);
       }
     }
   }
 
-  public seekAndPlay(positionMs: number): void {
-    this.seek(positionMs, true);
+  public seekAndPlay(positionMs: number, fromRoom: boolean = false): void {
+    this.seek(positionMs, true, fromRoom);
   }
 
   public addToQueue(track: Track): void {
     const store = usePlayerStore.getState();
+    if (store.playbackControlLocked || store.playbackQueueSnapshot) return;
     const newQueue = [...store.queue, track];
     store.setQueue(newQueue);
     if (this.masterPlaylist.length > 0) {
@@ -852,6 +873,7 @@ class PlayerEngine {
 
   public playNext(track: Track): void {
     const store = usePlayerStore.getState();
+    if (store.playbackControlLocked || store.playbackQueueSnapshot) return;
     const currentQueue = store.queue;
     const currentIndex = store.currentIndex;
 
@@ -884,6 +906,8 @@ class PlayerEngine {
   }
 
   public async stopAndClear(): Promise<void> {
+    const state = usePlayerStore.getState();
+    if (state.playbackControlLocked || state.playbackQueueSnapshot) return;
     const reported = this.telemetry.flushCurrentTrack();
     if (this.radioAppendTimeout) {
       clearTimeout(this.radioAppendTimeout);
@@ -907,13 +931,16 @@ class PlayerEngine {
   }
 
   public clearQueue(): void {
-    usePlayerStore.getState().clearQueue();
+    const state = usePlayerStore.getState();
+    if (state.playbackControlLocked || state.playbackQueueSnapshot) return;
+    state.clearQueue();
     this.masterPlaylist = [];
     this.originalUpcomingQueue = [];
   }
 
   public reorderQueue(fromIndex: number, toIndex: number): void {
     const store = usePlayerStore.getState();
+    if (store.playbackControlLocked || store.playbackQueueSnapshot) return;
     const queue = [...store.queue];
     if (
       fromIndex < 0 ||

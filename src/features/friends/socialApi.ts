@@ -46,6 +46,14 @@ export interface SharedPlaylistTrack {
   reactions: TrackReaction[];
 }
 
+export interface SharedPlaylistListener {
+  userId: string;
+  trackId: string;
+  status: "playing" | "paused";
+  updatedAt: number;
+  user: SocialPerson;
+}
+
 export interface SharedPlaylist {
   id: string;
   ownerId: string;
@@ -56,6 +64,7 @@ export interface SharedPlaylist {
   trackCount: number;
   members: SocialPerson[];
   tracks: SharedPlaylistTrack[];
+  listeners?: SharedPlaylistListener[];
 }
 
 export interface ListeningSession {
@@ -165,11 +174,15 @@ export const socialApi = {
   addTrack: (playlistId: string, track: Track) => post<SharedPlaylistTrack>(`/api/playlists/${encodeURIComponent(playlistId)}/tracks`, { track }),
   setTrackReaction: (playlistId: string, itemId: string, emoji: TrackReactionEmoji, reacted: boolean) =>
     post<{ reactions: TrackReaction[] }>(`/api/playlists/${encodeURIComponent(playlistId)}/tracks/${encodeURIComponent(itemId)}/reactions`, { emoji, reacted }),
+  setPlaylistPresence: (playlistId: string, presence: { trackId: string; status: "playing" | "paused" } | null) =>
+    post<{ ok: boolean }>(`/api/playlists/${encodeURIComponent(playlistId)}/presence`, presence),
+  setSourcePlaylistPresence: (sourcePlaylistId: string, presence: { trackId: string; status: "playing" | "paused" } | null) =>
+    post<{ ok: boolean }>(`/api/playlists/source/${encodeURIComponent(sourcePlaylistId)}/presence`, presence),
   removeTrack: (playlistId: string, itemId: string) => request<{ ok: boolean }>(`/api/playlists/${encodeURIComponent(playlistId)}/tracks/${encodeURIComponent(itemId)}`, { method: "DELETE" }),
   getSessions: () => request<{ items: ListeningSession[] }>("/api/sessions").then((result) => result.items),
-  createSession: (guestId: string, track: Track, positionMs = 0, playbackStatus: "playing" | "paused" = "playing") => post<ListeningSession>("/api/sessions", { guestId, track, positionMs, playbackStatus }),
   createHostedSession: (track: Track, positionMs = 0, playbackStatus: "playing" | "paused" = "playing") => post<ListeningSession>("/api/sessions/hosted", { track, positionMs, playbackStatus }),
   createPlaylistSession: (playlistId: string) => post<ListeningSession>(`/api/playlists/${encodeURIComponent(playlistId)}/sessions`),
+  getSessionQueue: (sessionId: string) => request<{ title: string; tracks: Track[] }>(`/api/sessions/${encodeURIComponent(sessionId)}/queue`),
   joinSession: (sessionId: string) => post<ListeningSession>(`/api/sessions/${encodeURIComponent(sessionId)}/join`),
   leaveSession: (sessionId: string) => post<{ ok: boolean }>(`/api/sessions/${encodeURIComponent(sessionId)}/leave`),
   async connectRoom(sessionId: string, onMessage: (message: RoomMessage) => void, onClose?: () => void): Promise<WebSocket> {

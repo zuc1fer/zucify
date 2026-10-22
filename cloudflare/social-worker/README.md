@@ -6,7 +6,7 @@ An existing Liner playlist can be made collaborative from its playlist page. The
 
 Invited members see the shared playlist in their Zucify Library and open a social-backed playlist view, even when the original Liner playlist is not in their account.
 
-Shared playlists can host playlist parties. Members accept the invite from Friends → Listening together; playback starts at the first song, and any connected member can change tracks or pause. Friends also has open listening parties that accepted friends can join; only the host controls playback in those rooms.
+Shared playlists show a now-listening indicator beside tracks while a member is playing or has recently paused a song; stale presence expires after about a minute. Playlist parties start with a frozen queue snapshot from the first song; members can control playback, while songs added later stay in the shared playlist for the next party. Friends also has open listening parties that accepted friends can join; only the host controls playback in those rooms.
 
 ## Deploy to your Cloudflare account
 

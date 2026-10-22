@@ -38,10 +38,12 @@ import { useIsContentTransparent } from "@/features/settings/store/customization
 import { useAuthStore } from "@/features/auth";
 import { connectListeningRoom, getListeningRoom, leaveListeningRoom, subscribeListeningRoom, type ListeningRoomSnapshot } from "@/features/friends/listeningRoom";
 import TrackReactions from "@/features/friends/ui/TrackReactions";
+import ListeningNow from "@/features/friends/ui/ListeningNow";
 import {
   isSocialApiConfigured,
   socialApi,
   type SharedPlaylist,
+  type SharedPlaylistListener,
   type SharedPlaylistTrack,
   type SocialPerson,
   type TrackReactionEmoji,
@@ -65,8 +67,10 @@ interface TrackItemProps {
   highlight?: string;
   socialTrack?: SharedPlaylistTrack;
   addedByName?: string;
+  listeningListeners?: SharedPlaylistListener[];
   isSocialAdded?: boolean;
   socialOnly?: boolean;
+  playDisabled?: boolean;
   reactionDisabled?: boolean;
   onReaction?: (item: SharedPlaylistTrack, emoji: TrackReactionEmoji, reacted: boolean) => void;
 }
@@ -83,12 +87,15 @@ const TrackItem = memo(function TrackItem({
   highlight,
   socialTrack,
   addedByName,
+  listeningListeners,
   isSocialAdded = false,
   socialOnly = false,
+  playDisabled = false,
   reactionDisabled = false,
   onReaction,
 }: TrackItemProps) {
   const handlePlay = useCallback(() => {
+    if (playDisabled) return;
     if (typeof window !== "undefined" && window.__linerWasDragging) return;
     const context = playlistId ? `playlist:${playlistId}` : playlistTitle;
     playerEngine.playTrack(
@@ -97,7 +104,7 @@ const TrackItem = memo(function TrackItem({
       context,
       playlistCoverUrl,
     );
-  }, [track, allTracks, playlistId, playlistTitle, playlistCoverUrl]);
+  }, [track, allTracks, playlistId, playlistTitle, playlistCoverUrl, playDisabled]);
 
   return (
     <div style={style} data-reorder-item>
@@ -123,21 +130,25 @@ const TrackItem = memo(function TrackItem({
         }
         durationMs={track.durationMs}
         explicit={track.explicit}
-        rightContent={socialTrack ? (
+        rightContent={socialTrack || playDisabled ? (
           <div
             className="flex flex-col items-end justify-center gap-[1px]"
             data-prevent-drag
             onClick={(event) => event.stopPropagation()}
           >
-            <span className="max-w-[140px] truncate text-[10px] leading-none text-text-tertiary">
-              Added by {addedByName || "a friend"}
-            </span>
-            <TrackReactions
-              title={track.title}
-              reactions={socialTrack.reactions ?? []}
-              disabled={reactionDisabled}
-              onReaction={(emoji, reacted) => onReaction?.(socialTrack, emoji, reacted)}
-            />
+            {playDisabled && <span className="text-[9px] leading-none text-text-tertiary" title="This song was added after the party started">Next party</span>}
+            {socialTrack && <>
+              <span className="max-w-[140px] truncate text-[10px] leading-none text-text-tertiary">
+                Added by {addedByName || "a friend"}
+              </span>
+              <ListeningNow listeners={listeningListeners} trackId={track.id} />
+              <TrackReactions
+                title={track.title}
+                reactions={socialTrack.reactions ?? []}
+                disabled={reactionDisabled}
+                onReaction={(emoji, reacted) => onReaction?.(socialTrack, emoji, reacted)}
+              />
+            </>}
           </div>
         ) : undefined}
         onPlay={handlePlay}
@@ -187,6 +198,7 @@ function LibraryPlaylistContent() {
 
   const currentUser = useAuthStore((state) => state.user);
   const currentTrack = usePlayerStore((state) => state.currentTrack);
+  const playbackQueueSnapshot = usePlayerStore((state) => state.playbackQueueSnapshot);
   const socialConfigured = isSocialApiConfigured();
   const [linkedPlaylist, setLinkedPlaylist] = useState<SharedPlaylist | null>(null);
   const [listeningRoom, setListeningRoom] = useState<ListeningRoomSnapshot | null>(() => getListeningRoom());
@@ -356,6 +368,12 @@ function LibraryPlaylistContent() {
     ...baseTracks,
     ...linkedAddedTracks.map((item) => ({ ...item.track, playlistItemId: `zucify:${item.id}` })),
   ], [baseTracks, linkedAddedTracks]);
+  const playlistPartyActive = Boolean(
+    linkedPlaylist && !listeningRoom?.ended && listeningRoom?.partyType === "playlist" && listeningRoom.sharedPlaylistId === linkedPlaylist.id,
+  );
+  const partyQueueTracks = playlistPartyActive && playbackQueueSnapshot
+    ? playbackQueueSnapshot
+    : currentTracks;
   const socialTrackByRowKey = useMemo(() => {
     const byKey = new Map<string, SharedPlaylistTrack>();
     for (const item of linkedPlaylist?.tracks ?? []) {
@@ -411,23 +429,23 @@ function LibraryPlaylistContent() {
     const first = search.matches?.[0];
     if (!first || !viewData) return;
     const context = decodedId ? `playlist:${decodedId}` : viewData.title;
-    playerEngine.playTrack(first.track, currentTracks, context, viewData.coverUrl);
-  }, [search.matches, viewData, decodedId, currentTracks]);
+    playerEngine.playTrack(first.track, partyQueueTracks, context, viewData.coverUrl);
+  }, [search.matches, viewData, decodedId, partyQueueTracks]);
 
   const handlePlayAll = useCallback(() => {
-    if (!currentTracks.length || !viewData) return;
+    if (!partyQueueTracks.length || !viewData) return;
     const context = decodedId ? `playlist:${decodedId}` : viewData.title;
     playerEngine.clearQueue();
     playerEngine.playTrack(
-      currentTracks[0],
-      currentTracks,
+      partyQueueTracks[0],
+      partyQueueTracks,
       context,
       viewData.coverUrl,
     );
-  }, [currentTracks, viewData, decodedId]);
+  }, [partyQueueTracks, viewData, decodedId]);
 
   const handleShufflePlay = useCallback(() => {
-    if (!currentTracks.length || !viewData) return;
+    if (!currentTracks.length || !viewData || playlistPartyActive) return;
     const context = decodedId ? `playlist:${decodedId}` : viewData.title;
     playerEngine.clearQueue();
     void playerEngine.playShuffled(
@@ -435,7 +453,7 @@ function LibraryPlaylistContent() {
       context,
       viewData.coverUrl,
     );
-  }, [currentTracks, viewData, decodedId]);
+  }, [currentTracks, viewData, decodedId, playlistPartyActive]);
 
   const { toast } = useToast();
   const [addedToQueue, setAddedToQueue] = useState(false);
@@ -491,10 +509,6 @@ function LibraryPlaylistContent() {
       setSocialBusy(false);
     }
   }, [currentTrack, linkedPlaylist, socialBusy, toast]);
-
-  const playlistPartyActive = Boolean(
-    linkedPlaylist && !listeningRoom?.ended && listeningRoom?.partyType === "playlist" && listeningRoom.sharedPlaylistId === linkedPlaylist.id,
-  );
 
   const handleStartPlaylistParty = useCallback(async () => {
     if (!linkedPlaylist || !currentUser || socialBusy) return;
@@ -1006,7 +1020,7 @@ function LibraryPlaylistContent() {
                       <Button
                         variant={hasCustomBg ? "glass-primary" : "primary"}
                         onClick={handlePlayAll}
-                        disabled={currentTracks.length === 0}
+                        disabled={partyQueueTracks.length === 0}
                         className="!h-[36px] w-full !text-[13.5px] !font-[500] px-[16px] flex items-center justify-center gap-[6px]"
                       >
                         <PlayFill size={16} />
@@ -1017,7 +1031,7 @@ function LibraryPlaylistContent() {
                         <Button
                           variant={hasCustomBg ? "glass-action" : "outline"}
                           onClick={handleAddToQueue}
-                          disabled={currentTracks.length === 0}
+                          disabled={currentTracks.length === 0 || playlistPartyActive}
                           className={`!h-[36px] flex-1 min-w-0 !text-[13px] !font-[500] px-[12px] flex items-center justify-center gap-[6px] ${
                             // optical centring: with three icon buttons beside it the label reads 1px right
                             !isLikesMode ? "[&>*]:-translate-x-px" : ""
@@ -1055,9 +1069,9 @@ function LibraryPlaylistContent() {
                         <Button
                           variant={hasCustomBg ? "glass-action" : "outline"}
                           onClick={handleShufflePlay}
-                          disabled={currentTracks.length === 0}
+                          disabled={currentTracks.length === 0 || playlistPartyActive}
                           className="!h-[36px] !w-[36px] shrink-0 !p-0 flex items-center justify-center text-text-primary"
-                          title={t("common.shuffle")}
+                          title={playlistPartyActive ? "The party playlist order is fixed" : t("common.shuffle")}
                         >
                           <LuShuffle size={16} />
                         </Button>
@@ -1179,7 +1193,7 @@ function LibraryPlaylistContent() {
                                   {socialBusy ? "Starting party…" : "Start playlist party"}
                                 </Button>
                               )}
-                              <p className="m-0 text-[10px] leading-[1.4] text-text-tertiary">Invitees can join from Friends → Listening together. Everyone in a playlist party can control playback.</p>
+                              <p className="m-0 text-[10px] leading-[1.4] text-text-tertiary">Invitees can join from Friends → Listening together. Everyone can control playback. The party queue is fixed when it starts; songs added later are available in the next party.</p>
                               {currentTrack && (
                                 <Button variant="outline" onClick={() => void handleAddCurrentTrack()} disabled={socialBusy} className="!h-[32px] w-full !text-[11px]">
                                   Add current song
@@ -1288,6 +1302,9 @@ function LibraryPlaylistContent() {
                   const canReorder = Boolean(
                     !isLikesMode && !linkedPlaylist && decodedId && track.playlistItemId && !isFiltering,
                   );
+                  const playDisabled = Boolean(
+                    playlistPartyActive && listeningRoom?.playlistTrackIds && !listeningRoom.playlistTrackIds.includes(track.id),
+                  );
 
                   return (
                     <TrackItem
@@ -1298,12 +1315,14 @@ function LibraryPlaylistContent() {
                       playlistId={isLikesMode ? undefined : (decodedId ?? undefined)}
                       playlistTitle={viewData.title}
                       playlistCoverUrl={viewData.coverUrl}
-                      allTracks={currentTracks}
+                      allTracks={partyQueueTracks}
                       showReorderHandle={canReorder}
                       socialTrack={socialTrack}
                       addedByName={addedByName}
+                      listeningListeners={linkedPlaylist?.listeners?.filter((listener) => listener.trackId === track.id)}
                       isSocialAdded={isSocialAdded}
                       socialOnly={isSharedMode}
+                      playDisabled={playDisabled}
                       reactionDisabled={socialBusy}
                       onReaction={handleTrackReaction}
                       highlight={search.activeQuery || undefined}

@@ -205,6 +205,7 @@ function MiniPlayer({
   isEdgeToEdge = false,
 }: MiniPlayerProps) {
   const player = usePlayerState();
+  const playbackControlLocked = player.playbackControlLocked;
   const { t } = useTranslation();
   const { resolvedTheme } = useTheme();
   const isLight =
@@ -645,6 +646,7 @@ function MiniPlayer({
         onPointerDown={(e) => {
 
           if (e.button !== 0) return;
+          if (playbackControlLocked) return;
           const target = e.target as Element | null;
           if (
             !target ||
@@ -711,6 +713,7 @@ function MiniPlayer({
               positionMs={player.positionMs}
               durationMs={durationMs}
               onSeek={(pos) => playerEngine.seek(pos)}
+              disabled={playbackControlLocked}
               size="xs"
               fillColor={accentColorSolid || undefined}
               fillClassName={!accentColorSolid ? (isLight ? "bg-text-primary" : "bg-white") : undefined}
@@ -955,10 +958,13 @@ function MiniPlayer({
             className="pointer-events-auto flex items-center gap-[8px] prevent-seek cursor-default"
             onPointerDown={(e) => e.stopPropagation()}
           >
+            {playbackControlLocked && <span className="text-[10px] text-text-tertiary">Following host</span>}
             <button
               type="button"
               aria-label="Previous track"
-              className={`${iconButtonClass} text-text-secondary hover:text-text-primary`}
+              title={playbackControlLocked ? "Playback is controlled by the host" : undefined}
+              disabled={playbackControlLocked}
+              className={`${iconButtonClass} text-text-secondary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-30`}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={() => {
                 void playerEngine.skipPrevious();
@@ -969,8 +975,10 @@ function MiniPlayer({
             </button>
             <button
               type="button"
-              aria-label={isPlaying ? "Pause" : "Play"}
-              className="inline-flex h-[34px] w-[34px] items-center justify-center rounded-full bg-btn-primary-bg text-btn-primary-text transition-all duration-150 ease-out hover:scale-105 active:scale-[0.96] border-none cursor-pointer shadow-sm"
+              aria-label={playbackControlLocked ? "Following the host" : isPlaying ? "Pause" : "Play"}
+              title={playbackControlLocked ? "Playback is controlled by the host" : undefined}
+              disabled={playbackControlLocked}
+              className="inline-flex h-[34px] w-[34px] items-center justify-center rounded-full bg-btn-primary-bg text-btn-primary-text transition-all duration-150 ease-out hover:scale-105 active:scale-[0.96] border-none cursor-pointer shadow-sm disabled:cursor-not-allowed disabled:opacity-30"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={() => {
                 void playerEngine.togglePlayPause();
@@ -1005,7 +1013,9 @@ function MiniPlayer({
             <button
               type="button"
               aria-label="Next track"
-              className={`${iconButtonClass} text-text-secondary hover:text-text-primary`}
+              title={playbackControlLocked ? "Playback is controlled by the host" : undefined}
+              disabled={playbackControlLocked}
+              className={`${iconButtonClass} text-text-secondary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-30`}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={() => {
                 void playerEngine.skipNext();

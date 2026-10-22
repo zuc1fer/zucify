@@ -43,9 +43,11 @@ export interface QueueState {
   currentTrack: Track | null;
   playbackContext: string | null;
   playbackContextCover: string | null;
+  playbackQueueSnapshot: Track[] | null;
 }
 
 export interface SessionState {
+  playbackControlLocked: boolean;
   volume: number;
   repeat: RepeatMode;
   shuffle: boolean;
@@ -97,6 +99,8 @@ export interface PlayerStore extends PlayerState {
   setDuration: (durationMs: number) => void;
   setPlaybackMode: (mode: "hls" | "mp3" | null) => void;
   setRepeat: (mode: RepeatMode) => void;
+  setPlaybackControlLocked: (locked: boolean) => void;
+  setPlaybackQueueSnapshot: (tracks: Track[] | null) => void;
   setShuffle: (shuffle: boolean) => void;
   setVolume: (volume: number) => void;
   setCurrentTrack: (track: Track | null, index: number) => void;
@@ -142,8 +146,10 @@ export const usePlayerStore = create<PlayerStore>()(
       currentTrack: null,
       playbackContext: null,
       playbackContextCover: null,
+      playbackQueueSnapshot: null,
 
       // SessionSlice
+      playbackControlLocked: false,
       volume: 1,
       repeat: "off",
       shuffle: false,
@@ -171,6 +177,8 @@ export const usePlayerStore = create<PlayerStore>()(
       setDuration: (durationMs) => set({ durationMs }),
       setPlaybackMode: (playbackMode) => set({ playbackMode }),
       setRepeat: (repeat) => set({ repeat }),
+      setPlaybackControlLocked: (playbackControlLocked) => set({ playbackControlLocked }),
+      setPlaybackQueueSnapshot: (playbackQueueSnapshot) => set({ playbackQueueSnapshot }),
       setShuffle: (shuffle) => set({ shuffle }),
       setVolume: (volume) => set({ volume }),
       setCurrentTrack: (currentTrack, currentIndex) => {
@@ -214,6 +222,8 @@ export const usePlayerStore = create<PlayerStore>()(
       resetSpeedAndPitch: () => set({ playbackRate: 1, pitchSemitones: 0 }),
       resetPlayback: () =>
         set({
+          playbackControlLocked: false,
+          playbackQueueSnapshot: null,
           status: "idle",
           playbackMode: null,
           error: null,

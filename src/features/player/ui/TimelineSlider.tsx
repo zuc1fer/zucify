@@ -14,6 +14,7 @@ export interface TimelineSliderProps {
   fillColor?: string;
   showTime?: boolean;
   onScrub?: (positionMs: number) => void;
+  disabled?: boolean;
 }
 
 export function formatPlaybackTime(ms: number): string {
@@ -37,6 +38,7 @@ export const TimelineSlider = memo(function TimelineSlider({
   fillColor,
   showTime = false,
   onScrub,
+  disabled = false,
 }: TimelineSliderProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -68,6 +70,7 @@ export const TimelineSlider = memo(function TimelineSlider({
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
+      if (disabled) return;
       e.stopPropagation();
       e.preventDefault();
       setIsDragging(true);
@@ -100,12 +103,12 @@ export const TimelineSlider = memo(function TimelineSlider({
       window.addEventListener("pointerup", onPointerUp);
       window.addEventListener("pointercancel", onPointerUp);
     },
-    [calculatePositionFromPointer, onScrub, onSeek],
+    [calculatePositionFromPointer, disabled, onScrub, onSeek],
   );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (duration <= 0) return;
+      if (disabled || duration <= 0) return;
       const step = 5000; // 5 seconds
       if (e.key === "ArrowRight") {
         e.preventDefault();
@@ -121,7 +124,7 @@ export const TimelineSlider = memo(function TimelineSlider({
         onSeek(duration);
       }
     },
-    [currentPosition, duration, onSeek],
+    [currentPosition, disabled, duration, onSeek],
   );
 
   const containerHeights = {
@@ -165,13 +168,14 @@ export const TimelineSlider = memo(function TimelineSlider({
       <div
         role="slider"
         aria-label="Seek"
+        aria-disabled={disabled}
         aria-valuemin={0}
         aria-valuemax={duration}
         aria-valuenow={currentPosition}
-        tabIndex={0}
+        tabIndex={disabled ? -1 : 0}
         onKeyDown={handleKeyDown}
         onPointerDown={handlePointerDown}
-        className="relative flex h-full flex-1 items-center cursor-pointer outline-none"
+        className={`relative flex h-full flex-1 items-center outline-none ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
       >
         <motion.div
           ref={trackRef}

@@ -23,6 +23,8 @@ describe("Player State Machine", () => {
       durationMs: 0,
       repeat: "off",
       shuffle: false,
+      playbackControlLocked: false,
+      playbackQueueSnapshot: null,
       error: null,
     });
   });
@@ -40,6 +42,37 @@ describe("Player State Machine", () => {
     expect(state.status).toBe("loading");
     expect(state.positionMs).toBe(0);
     expect(state.durationMs).toBe(180000);
+  });
+
+  it("blocks local transport and track changes while following a Friends party", async () => {
+    const current = mockTrack("current", "Current Song");
+    const attempted = mockTrack("attempted", "Attempted Song");
+    await playerEngine.playTrack(current, [current]);
+    usePlayerStore.getState().setPlaybackControlLocked(true);
+
+    await playerEngine.playTrack(attempted, [attempted]);
+    await playerEngine.skipNext();
+    playerEngine.seek(30_000);
+    playerEngine.togglePlayPause();
+
+    const state = usePlayerStore.getState();
+    expect(state.currentTrack?.id).toBe(current.id);
+    expect(state.positionMs).toBe(0);
+    expect(state.status).toBe("loading");
+  });
+
+  it("keeps every playlist party track change on the saved queue snapshot", async () => {
+    const first = mockTrack("first", "First Song");
+    const second = mockTrack("second", "Second Song");
+    const outside = mockTrack("outside", "Added after the party started");
+    usePlayerStore.getState().setPlaybackQueueSnapshot([first, second]);
+
+    await playerEngine.playTrack(second, [second]);
+    expect(usePlayerStore.getState().queue.map((item) => item.id)).toEqual(["first", "second"]);
+
+    await playerEngine.playTrack(outside, [outside]);
+    expect(usePlayerStore.getState().currentTrack?.id).toBe(second.id);
+    expect(usePlayerStore.getState().queue.map((item) => item.id)).toEqual(["first", "second"]);
   });
 
   it("handles fast skipping (rapid next clicks) with instantaneous UI transitions", async () => {

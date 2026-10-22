@@ -16,6 +16,7 @@ import Button from "@/shared/ui/Button";
 import TextInput from "@/shared/ui/TextInput";
 import UserAvatar from "@/shared/ui/UserAvatar";
 import TrackReactions from "./TrackReactions";
+import ListeningNow from "./ListeningNow";
 import {
   isSocialApiConfigured,
   socialApi,
@@ -538,7 +539,7 @@ export default function FriendsPage() {
             {playlist.tracks.length === 0 ? <p className="m-[15px] text-[12px] text-text-tertiary">No songs yet. Play a song, then add it here.</p> : <div className="divide-y divide-border-primary">
               {playlist.tracks.map((item, index) => <div key={item.id} className="flex flex-wrap items-center gap-[8px] px-[14px] py-[9px]">
                 <span className="w-[18px] text-center text-[11px] text-text-tertiary">{index + 1}</span><button className="flex min-w-[180px] flex-1 items-center gap-[10px] border-0 bg-transparent p-0 text-left" onClick={() => void playerEngine.playTrack(item.track, playlist.tracks.map((entry) => entry.track), `shared:${playlist.id}`)}>
-                  <img src={item.track.coverUrl || ""} alt="" className="h-[38px] w-[38px] rounded object-cover" /><span className="min-w-0"><span className="block truncate text-[13px] text-text-primary">{item.track.title}</span><span className="block truncate text-[11px] text-text-tertiary">{item.track.artists}</span><span className="block truncate text-[10px] text-text-tertiary">Added by {addedByName(item, user)}</span></span>
+                  <img src={item.track.coverUrl || ""} alt="" className="h-[38px] w-[38px] rounded object-cover" /><span className="min-w-0"><span className="block truncate text-[13px] text-text-primary">{item.track.title}</span><span className="block truncate text-[11px] text-text-tertiary">{item.track.artists}</span><span className="block truncate text-[10px] text-text-tertiary">Added by {addedByName(item, user)}</span><ListeningNow listeners={playlist.listeners} trackId={item.track.id} /></span>
                 </button><TrackReactions title={item.track.title} reactions={item.reactions ?? []} disabled={busy} onReaction={(emoji, reacted) => void setTrackReaction(playlist, item, emoji, reacted)} />{!item.sourceItemId && <Button size="sm" variant="ghost" onClick={() => void runAction(() => socialApi.removeTrack(playlist.id, item.id), "Song removed from the shared playlist.")} disabled={busy}>Remove</Button>}
               </div>)}
             </div>}
