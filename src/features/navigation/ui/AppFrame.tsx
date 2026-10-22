@@ -8,6 +8,9 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { App as CapacitorApp } from "@capacitor/app";
+import { Capacitor } from "@capacitor/core";
+import type { PluginListenerHandle } from "@capacitor/core";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Search3Line,
@@ -56,6 +59,8 @@ import {
 } from "@/features/library";
 import { SettingsModal, useCustomizationStore, getBlockStyle } from "@/features/settings";
 import { UpdateModal, UpdateToastBridge } from "@/features/updater";
+import { closeTopDialog } from "@/shared/ui/Dialog";
+import { resolveAndroidBackAction } from "../utils/androidBackAction";
 
 
 interface AppFrameProps {
@@ -236,6 +241,64 @@ export default function AppFrame({ children }: AppFrameProps) {
       navigate("/", { replace: true });
     }
   }, [fullscreenPlayerOpen, isFullscreenRoute, navigate]);
+
+  const androidBackHandlerRef = useRef<() => void>(() => {});
+  androidBackHandlerRef.current = () => {
+    if (closeTopDialog()) return;
+
+    const historyState = window.history.state as { idx?: unknown } | null;
+    const action = resolveAndroidBackAction({
+      pathname,
+      historyIndex: typeof historyState?.idx === "number" ? historyState.idx : null,
+      fullscreenPlayerOpen,
+      searchOpen,
+      rightPanelOpen: queuePopupOpen,
+    });
+
+    switch (action) {
+      case "close-player":
+        setFullscreenPlayerOpen(false);
+        break;
+      case "close-search":
+        closeSearch();
+        break;
+      case "close-right-panel":
+        setQueuePopupOpen(false);
+        break;
+      case "navigate-back":
+        navigate(-1);
+        break;
+      case "navigate-home":
+        navigate("/", { replace: true });
+        break;
+      case "exit-app":
+        void CapacitorApp.exitApp();
+        break;
+    }
+  };
+
+  useEffect(() => {
+    if (Capacitor.getPlatform() !== "android") return;
+
+    let disposed = false;
+    let listener: PluginListenerHandle | undefined;
+    void CapacitorApp.addListener("backButton", () => androidBackHandlerRef.current())
+      .then((registeredListener) => {
+        if (disposed) {
+          void registeredListener.remove();
+        } else {
+          listener = registeredListener;
+        }
+      })
+      .catch(() => {
+        // The listener is only available inside the native Android shell.
+      });
+
+    return () => {
+      disposed = true;
+      if (listener) void listener.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (isFullscreenPlayer && !hasCurrentTrack) {

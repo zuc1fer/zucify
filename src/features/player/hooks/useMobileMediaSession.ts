@@ -7,10 +7,11 @@ import {
 import { playerEngine } from "../engine/playerEngine";
 import { usePlayerState } from "./usePlayerState";
 
-const SEEK_STEP_MS = 10_000;
+const SEEK_STEP_MS = 30_000;
+type ZucifyMediaSessionAction = MediaSessionAction | "shuffle" | "repeat";
 let mediaActionsRegistered = false;
 
-function handleMediaAction(action: MediaSessionAction, seekTime?: number | null) {
+function handleMediaAction(action: ZucifyMediaSessionAction, seekTime?: number | null) {
   const player = playerEngine.getSnapshot();
 
   switch (action) {
@@ -46,6 +47,18 @@ function handleMediaAction(action: MediaSessionAction, seekTime?: number | null)
     case "seekbackward":
       playerEngine.seek(Math.max(0, player.positionMs - SEEK_STEP_MS));
       break;
+    case "shuffle":
+      playerEngine.setShuffle(!player.shuffle);
+      break;
+    case "repeat":
+      playerEngine.setRepeat(
+        player.repeat === "off"
+          ? "all"
+          : player.repeat === "all"
+            ? "one"
+            : "off",
+      );
+      break;
   }
 }
 
@@ -57,7 +70,7 @@ export function useMobileMediaSession(): void {
     if (!Capacitor.isNativePlatform() || mediaActionsRegistered) return;
     mediaActionsRegistered = true;
 
-    const actions: MediaSessionAction[] = [
+    const actions: ZucifyMediaSessionAction[] = [
       "play",
       "pause",
       "stop",
@@ -66,13 +79,22 @@ export function useMobileMediaSession(): void {
       "seekto",
       "seekforward",
       "seekbackward",
+      "shuffle",
+      "repeat",
     ];
 
     for (const action of actions) {
-      void MediaSession.setActionHandler({ action }, ({ seekTime }) => {
-        handleMediaAction(action, seekTime);
-      }).catch((error) => {
-        console.warn("[MobileMediaSession] Could not register media action:", action, error);
+      void MediaSession.setActionHandler(
+        { action: action as MediaSessionAction },
+        ({ seekTime }) => {
+          handleMediaAction(action, seekTime);
+        },
+      ).catch((error) => {
+        console.warn(
+          "[MobileMediaSession] Could not register media action:",
+          action,
+          error,
+        );
       });
     }
   }, []);

@@ -349,8 +349,31 @@ function MiniPlayer({
     };
   }, [clearVolumeHoverTimer, speedOpen, volumeOpen]);
 
-  const [scrubRatio, setScrubRatio] = useState<number | null>(null);
-  const activeProgress = scrubRatio !== null ? scrubRatio : progress;
+  const handleMiniPlayerClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const target = event.target as Element | null;
+      if (
+        target?.closest?.(
+          "button, a, input, [role='button'], [role='slider'], .prevent-seek",
+        )
+      ) {
+        return;
+      }
+      onFullscreenOpen?.();
+    },
+    [onFullscreenOpen],
+  );
+
+  const handleMiniPlayerKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.target !== event.currentTarget) return;
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        onFullscreenOpen?.();
+      }
+    },
+    [onFullscreenOpen],
+  );
 
   return (
     <div
@@ -422,59 +445,20 @@ function MiniPlayer({
                 }`
         }`}
         style={miniplayerCustomStyle}
-        onPointerDown={(e) => {
-
-          if (e.button !== 0) return;
-          if (playbackControlLocked) return;
-          const target = e.target as Element | null;
-          if (
-            !target ||
-            target.closest?.(
-              "button, a, input, [role='button'], [role='slider'], .prevent-seek",
-            )
-          ) {
-            return;
-          }
-          const card = e.currentTarget;
-          const rect = card.getBoundingClientRect();
-          if (!rect.width || !durationMs) return;
-
-          const calcRatio = (clientX: number) =>
-            Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-
-          const initialRatio = calcRatio(e.clientX);
-          setScrubRatio(initialRatio);
-
-          const onMove = (ev: PointerEvent) => {
-            const r = calcRatio(ev.clientX);
-            setScrubRatio(r);
-          };
-
-          const onUp = (ev: PointerEvent) => {
-            const finalRatio = calcRatio(ev.clientX);
-            setScrubRatio(null);
-            playerEngine.seek(finalRatio * durationMs);
-            window.removeEventListener("pointermove", onMove);
-            window.removeEventListener("pointerup", onUp);
-            window.removeEventListener("pointercancel", onUp);
-          };
-
-          window.addEventListener("pointermove", onMove);
-          window.addEventListener("pointerup", onUp);
-          window.addEventListener("pointercancel", onUp);
-        }}
+        onClick={handleMiniPlayerClick}
+        onKeyDown={handleMiniPlayerKeyDown}
+        role="group"
+        aria-label={t("player.open_player")}
+        tabIndex={0}
       >
         {usesBackgroundProgress && (
           <div
             className="absolute inset-y-0 left-0 z-0 pointer-events-none"
             style={{
               backgroundColor: accentColor,
-              width: `${activeProgress * 100}%`,
+              width: `${progress * 100}%`,
               willChange: "width",
-              transition:
-                scrubRatio !== null
-                  ? "none"
-                  : "width 200ms cubic-bezier(0.22, 1, 0.36, 1)",
+              transition: "width 200ms cubic-bezier(0.22, 1, 0.36, 1)",
             }}
           />
         )}

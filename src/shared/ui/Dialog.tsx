@@ -17,6 +17,13 @@ export interface DialogProps {
 
 const activeDialogs: Array<() => void> = [];
 
+export function closeTopDialog(): boolean {
+  const close = activeDialogs[activeDialogs.length - 1];
+  if (!close) return false;
+  close();
+  return true;
+}
+
 export default function Dialog({
   open,
   onOpenChange,

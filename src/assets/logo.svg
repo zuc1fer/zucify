@@ -1,3 +1,3 @@
-<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zucify">
-  <path d="M19 20H61L19 60H61" stroke="white" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<svg width="80" height="80" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zucify">
+  <image href="./zucify-snake.png" width="80" height="80" preserveAspectRatio="xMidYMid meet" />
 </svg>

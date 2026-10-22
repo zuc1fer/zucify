@@ -100,7 +100,7 @@ export default function HomePage() {
         style={{ marginBottom: "-32px" }}
         aria-hidden="true"
       />
-      <div className="relative z-10 px-4 pt-3 md:hidden">
+      <div className="relative z-10 px-4 pt-[calc(env(safe-area-inset-top)+24px)] md:hidden">
         <button
           type="button"
           onClick={() => useModalStore.getState().openSearch()}

@@ -11,7 +11,7 @@ import {
   selectIsGlassThemeActive,
 } from "../../store/customizationStore";
 import { SettingBlock, SettingRow, SettingSection } from "../controls";
-import defaultLogo from "@/assets/branding/logo-default.svg";
+import defaultLogo from "@/assets/zucify-snake.png";
 import spotifyLogo from "@/assets/branding/logo-spotify.svg";
 import discordLogo from "@/assets/branding/logo-discord.svg";
 import telegramLogo from "@/assets/branding/logo-telegram.svg";

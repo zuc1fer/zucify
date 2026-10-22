@@ -6,7 +6,7 @@ import Button from "@/shared/ui/Button";
 import { useToast } from "@/shared/ui";
 import { useTranslation, getTranslationsForAllLocales } from "@/languages";
 import { APP_VERSION } from "@/shared/config/version";
-import logo from "@/assets/logo.svg";
+import logo from "@/assets/zucify-snake.png";
 import spotifyLogo from "@/assets/branding/logo-spotify.svg";
 import discordLogo from "@/assets/branding/logo-discord.svg";
 import telegramLogo from "@/assets/branding/logo-telegram.svg";

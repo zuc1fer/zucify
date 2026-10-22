@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useTheme } from "next-themes";
 import { usePlayerStore, type AccentVariant } from "../store/playerStore";
-import defaultLogo from "@/assets/branding/logo-default.svg";
+import defaultLogo from "@/assets/zucify-snake.png";
 import spotifyLogo from "@/assets/branding/logo-spotify.svg";
 import discordLogo from "@/assets/branding/logo-discord.svg";
 import telegramLogo from "@/assets/branding/logo-telegram.svg";
@@ -74,7 +74,14 @@ async function renderIconDataUrl(
     ctx.filter = "invert(1)";
   }
 
-  ctx.drawImage(img, 128.7, 107.8, 254.6, 296.4);
+  const logoSize = logoSrc === defaultLogo ? 296.4 : 254.6;
+  ctx.drawImage(
+    img,
+    (512 - logoSize) / 2,
+    107.8,
+    logoSize,
+    296.4,
+  );
   return canvas.toDataURL("image/png");
 }
 

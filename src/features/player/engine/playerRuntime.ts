@@ -149,10 +149,10 @@ export class PlayerRuntime {
         st.dispatch({ type: "SEEK_COMMITTED", positionMs: Math.round(next) });
       };
       navigator.mediaSession.setActionHandler("seekbackward", (details) => {
-        seekBy(-(details.seekOffset ?? 10));
+        seekBy(-(details.seekOffset ?? 30));
       });
       navigator.mediaSession.setActionHandler("seekforward", (details) => {
-        seekBy(details.seekOffset ?? 10);
+        seekBy(details.seekOffset ?? 30);
       });
       navigator.mediaSession.setActionHandler("seekto", (details) => {
         if (details.seekTime !== undefined && !Number.isNaN(details.seekTime)) {

@@ -2,7 +2,7 @@ import { memo } from "react";
 import AppImage from "@/features/covers/ui/AppImage";
 import { Link, useLocation } from "react-router-dom";
 import { sidebarNavItems } from "../data/navigation";
-import logo from "@/assets/logo.svg";
+import logo from "@/assets/zucify-snake.png";
 import spotifyLogo from "@/assets/branding/logo-spotify.svg";
 import discordLogo from "@/assets/branding/logo-discord.svg";
 import telegramLogo from "@/assets/branding/logo-telegram.svg";

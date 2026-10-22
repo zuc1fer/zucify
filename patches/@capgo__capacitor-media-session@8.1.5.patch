@@ -1,0 +1,175 @@
+diff --git a/android/src/main/java/com/capgo/mediasession/MediaSessionCallback.java b/android/src/main/java/com/capgo/mediasession/MediaSessionCallback.java
+index 402bc6fb877f919269f0bfcfe535933da83c01e0..405564f478be65674e779fa3b1ee77fd50b26d59 100644
+--- a/android/src/main/java/com/capgo/mediasession/MediaSessionCallback.java
++++ b/android/src/main/java/com/capgo/mediasession/MediaSessionCallback.java
+@@ -1,6 +1,7 @@
+ package com.capgo.mediasession;
+ 
+ import android.support.v4.media.session.MediaSessionCompat;
++import android.os.Bundle;
+ import com.getcapacitor.JSObject;
+ 
+ public class MediaSessionCallback extends MediaSessionCompat.Callback {
+@@ -52,4 +53,9 @@ public class MediaSessionCallback extends MediaSessionCompat.Callback {
+     public void onStop() {
+         plugin.actionCallback("stop");
+     }
++
++    @Override
++    public void onCustomAction(String action, Bundle extras) {
++        plugin.actionCallback(action);
++    }
+ }
+diff --git a/android/src/main/java/com/capgo/mediasession/MediaSessionService.java b/android/src/main/java/com/capgo/mediasession/MediaSessionService.java
+index 07a5f6d8e3feb1b29f7368d07971b83961c9d60a..00dd9f289ac9be7b7afcc5c7e2dc7ce885a8a363 100644
+--- a/android/src/main/java/com/capgo/mediasession/MediaSessionService.java
++++ b/android/src/main/java/com/capgo/mediasession/MediaSessionService.java
+@@ -29,6 +29,7 @@ public class MediaSessionService extends Service {
+     private static final String TAG = "MediaSessionService";
+     private static final String CHANNEL_ID = "playback";
+     private static final int NOTIFICATION_ID = 1;
++    private static final String CUSTOM_ACTION_PREFIX = "com.capgo.mediasession.CUSTOM_ACTION.";
+ 
+     private MediaSessionCompat mediaSession;
+     private PlaybackStateCompat.Builder playbackStateBuilder;
+@@ -47,7 +48,9 @@ public class MediaSessionService extends Service {
+         "seekforward",
+         "nexttrack",
+         "seekto",
+-        "stop"
++        "stop",
++        "shuffle",
++        "repeat"
+     };
+     private final Set<String> possibleCompactViewActions = new HashSet<>(
+         Arrays.asList("previoustrack", "play", "pause", "nexttrack", "stop")
+@@ -197,6 +200,22 @@ public class MediaSessionService extends Service {
+                 MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_STOP)
+             )
+         );
++        notificationActions.put(
++            "shuffle",
++            new NotificationCompat.Action(
++                R.drawable.ic_baseline_shuffle_24,
++                "Shuffle",
++                buildCustomActionPendingIntent("shuffle")
++            )
++        );
++        notificationActions.put(
++            "repeat",
++            new NotificationCompat.Action(
++                R.drawable.ic_baseline_repeat_24,
++                "Repeat",
++                buildCustomActionPendingIntent("repeat")
++            )
++        );
+ 
+         playbackStateActions.put("previoustrack", PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS);
+         playbackStateActions.put("seekbackward", PlaybackStateCompat.ACTION_REWIND);
+@@ -215,12 +234,28 @@ public class MediaSessionService extends Service {
+ 
+     @Override
+     public int onStartCommand(Intent intent, int flags, int startId) {
+-        if (mediaSession != null) {
++        if (intent != null && intent.getAction() != null && intent.getAction().startsWith(CUSTOM_ACTION_PREFIX)) {
++            if (plugin != null) {
++                plugin.actionCallback(intent.getAction().substring(CUSTOM_ACTION_PREFIX.length()));
++            }
++        } else if (mediaSession != null) {
+             MediaButtonReceiver.handleIntent(mediaSession, intent);
+         }
+         return super.onStartCommand(intent, flags, startId);
+     }
+ 
++    private PendingIntent buildCustomActionPendingIntent(String action) {
++        Intent intent = new Intent(this, MediaSessionService.class);
++        intent.setAction(CUSTOM_ACTION_PREFIX + action);
++        int requestCode = action.hashCode();
++        return PendingIntent.getService(
++            this,
++            requestCode,
++            intent,
++            PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
++        );
++    }
++
+     public void setPlaybackState(int newPlaybackState) {
+         if (playbackState != newPlaybackState) {
+             playbackState = newPlaybackState;
+@@ -289,6 +324,7 @@ public class MediaSessionService extends Service {
+             }
+ 
+             long activePlaybackStateActions = 0;
++            java.util.List<PlaybackStateCompat.CustomAction> activeCustomActions = new java.util.ArrayList<>();
+             int[] activeCompactViewActionIndices = new int[3];
+             int notificationActionIndex = 0;
+             int compactNotificationActionIndicesIndex = 0;
+@@ -306,6 +342,24 @@ public class MediaSessionService extends Service {
+                         activePlaybackStateActions = activePlaybackStateActions | playbackStateActions.get(actionName);
+                     }
+ 
++                    if ("shuffle".equals(actionName)) {
++                        activeCustomActions.add(
++                            new PlaybackStateCompat.CustomAction.Builder(
++                                "shuffle",
++                                "Shuffle",
++                                R.drawable.ic_baseline_shuffle_24
++                            ).build()
++                        );
++                    } else if ("repeat".equals(actionName)) {
++                        activeCustomActions.add(
++                            new PlaybackStateCompat.CustomAction.Builder(
++                                "repeat",
++                                "Repeat",
++                                R.drawable.ic_baseline_repeat_24
++                            ).build()
++                        );
++                    }
++
+                     if (notificationActions.containsKey(actionName) && notificationBuilder != null) {
+                         notificationBuilder.addAction(notificationActions.get(actionName));
+                         if (possibleCompactViewActions.contains(actionName) && compactNotificationActionIndicesIndex < 3) {
+@@ -318,7 +372,12 @@ public class MediaSessionService extends Service {
+             }
+ 
+             if (playbackStateBuilder != null) {
+-                playbackStateBuilder.setActions(activePlaybackStateActions);
++                playbackStateBuilder = new PlaybackStateCompat.Builder()
++                    .setActions(activePlaybackStateActions)
++                    .setState(playbackState, position, playbackSpeed);
++                for (PlaybackStateCompat.CustomAction customAction : activeCustomActions) {
++                    playbackStateBuilder.addCustomAction(customAction);
++                }
+             }
+             if (notificationStyle != null) {
+                 if (compactNotificationActionIndicesIndex > 0) {
+diff --git a/android/src/main/res/drawable/ic_baseline_repeat_24.xml b/android/src/main/res/drawable/ic_baseline_repeat_24.xml
+new file mode 100644
+index 0000000000000000000000000000000000000000..b3f8b0d37fd315a5f2bee74f18bc5db6cabef121
+--- /dev/null
++++ b/android/src/main/res/drawable/ic_baseline_repeat_24.xml
+@@ -0,0 +1,9 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:height="24dp"
++    android:width="24dp"
++    android:viewportHeight="24"
++    android:viewportWidth="24">
++    <path
++        android:fillColor="@android:color/white"
++        android:pathData="M7,7h11v3l4,-4 -4,-4v3H5v7h2V7zM17,17H6v-3l-4,4 4,4v-3h15v-7h-2v5z" />
++</vector>
+diff --git a/android/src/main/res/drawable/ic_baseline_shuffle_24.xml b/android/src/main/res/drawable/ic_baseline_shuffle_24.xml
+new file mode 100644
+index 0000000000000000000000000000000000000000..0074a7781f076ef81419ad5decd32e6928090e34
+--- /dev/null
++++ b/android/src/main/res/drawable/ic_baseline_shuffle_24.xml
+@@ -0,0 +1,9 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:height="24dp"
++    android:width="24dp"
++    android:viewportHeight="24"
++    android:viewportWidth="24">
++    <path
++        android:fillColor="@android:color/white"
++        android:pathData="M14,5h7v7h-2V8.41l-4.29,4.3 -1.42,-1.42L17.59,7H14V5zM3,6h5.59l11.7,11.7 -1.41,1.41L7.78,8H3V6zM3,18h4.78l4.72,-4.72 1.41,1.41L8.59,20H3v-2z" />
++</vector>

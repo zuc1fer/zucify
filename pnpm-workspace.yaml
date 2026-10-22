@@ -3,3 +3,5 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - '@kawarp/core@1.2.1'
   - '@kawarp/react@1.2.1'
+patchedDependencies:
+  '@capgo/capacitor-media-session@8.1.5': patches/@capgo__capacitor-media-session@8.1.5.patch

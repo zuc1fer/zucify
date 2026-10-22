@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useRef, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import {
   SkipNext,
@@ -24,9 +24,13 @@ import { useCoverReady, CoverImage } from "@/features/covers";
 import ExplicitBadge from "@/shared/ui/ExplicitBadge";
 import { VolumePicker } from "./VolumePicker";
 import { TimelineSlider } from "./TimelineSlider";
+import { LuListPlus, LuPlus, LuShare2 } from "react-icons/lu";
 
 import { useTranslation } from "@/languages";
 import { BRANDING_ACCENTS } from "../branding";
+import { useModalStore } from "@/features/library/store/modalStore";
+import { useToast } from "@/shared/ui";
+import { buildShareUrl } from "@/shared/utils/share";
 
 const iconButtonClass =
   "inline-flex h-[28px] w-[28px] max-md:h-[40px] max-md:w-[40px] items-center justify-center text-white opacity-70 transition-all duration-150 ease-out hover:opacity-100 active:scale-[0.94] shrink-0 border-none bg-transparent cursor-pointer";
@@ -69,6 +73,9 @@ export function PlayerUiElements({
   onClose,
 }: PlayerUiElementsProps) {
   const player = usePlayerState();
+  const location = useLocation();
+  const { toast } = useToast();
+  const { t } = useTranslation();
 
   const track = player.currentTrack;
   const playbackControlLocked = player.playbackControlLocked;
@@ -76,6 +83,13 @@ export function PlayerUiElements({
   const coverUrl = track?.coverUrl || "";
   const trackTitle = track?.title || "";
   const trackArtists = track?.artists || "";
+  const albumTitle = track?.album?.title;
+  const releaseYear = track?.releaseDate?.match(/\b(?:19|20)\d{2}\b/)?.[0];
+  const contextTitle = player.playbackContext?.includes(":")
+    ? undefined
+    : player.playbackContext;
+  const isRadio = player.playbackContext?.startsWith("radio:") ?? false;
+  const canEditQueue = !playbackControlLocked && !playlistQueueLocked;
 
   const isLiked = useIsTrackLiked(track?.id);
   const likeMutation = useLikeTrack();
@@ -95,9 +109,66 @@ export function PlayerUiElements({
     }
   }, [track, isLiked, likeMutation, unlikeMutation]);
 
-  const isCoverLoaded = useCoverReady(coverUrl);
+  const handleAddToPlaylist = useCallback(() => {
+    if (!track) return;
+    useModalStore.getState().openAddToPlaylist({
+      id: track.id,
+      title: track.title,
+      artists: track.artists,
+      coverUrl: track.coverUrl,
+      durationMs: track.durationMs,
+      duration:
+        track.durationMs > 0
+          ? `${Math.floor(track.durationMs / 60000)}:${Math.floor(
+              (track.durationMs % 60000) / 1000,
+            )
+              .toString()
+              .padStart(2, "0")}`
+          : undefined,
+    });
+  }, [track]);
 
-  const { t } = useTranslation();
+  const handleAddToQueue = useCallback(() => {
+    if (!track || !canEditQueue) return;
+    playerEngine.addToQueue(track);
+    toast(t("common.added_to_queue"), "checkmark", {
+      description: track.title,
+    });
+  }, [track, canEditQueue, toast, t]);
+
+  const handleShare = useCallback(async () => {
+    if (!track) return;
+    const url = buildShareUrl("track", track.id);
+    try {
+      if (typeof navigator.share === "function") {
+        try {
+          await navigator.share({
+            title: track.title,
+            text: track.artists,
+            url,
+          });
+          return;
+        } catch (error) {
+          if (
+            error &&
+            typeof error === "object" &&
+            "name" in error &&
+            error.name === "AbortError"
+          ) {
+            return;
+          }
+        }
+      }
+      await navigator.clipboard.writeText(url);
+      toast(t("common.link_copied"), "checkmark", {
+        description: track.title,
+      });
+    } catch {
+      toast(t("common.failed_to_resolve_link"), "error");
+    }
+  }, [track, toast, t]);
+
+  const isCoverLoaded = useCoverReady(coverUrl);
 
   return (
     <>
@@ -194,6 +265,58 @@ export function PlayerUiElements({
             />
           </p>
         </div>
+      </div>
+
+      {/* Song details and quick actions */}
+      {(albumTitle || releaseYear || contextTitle || isRadio) && (
+        <div className="hidden w-[min(340px,88vw)] max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[11px] text-white/55 max-md:flex max-md:justify-start">
+          {albumTitle && (
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <MusicNote size={13} className="shrink-0" />
+              <span className="truncate">{t("collection.album")}: {albumTitle}</span>
+            </span>
+          )}
+          {releaseYear && <span>{releaseYear}</span>}
+          {isRadio && <span>{t("player.autoplay_radio")}</span>}
+          {!albumTitle && !isRadio && contextTitle && (
+            <span className="truncate">{t("player.playing_from")}: {contextTitle}</span>
+          )}
+        </div>
+      )}
+
+      <div className="hidden w-[min(340px,88vw)] max-w-full items-center gap-2 max-md:flex max-md:gap-1.5">
+        <button
+          type="button"
+          aria-label={t("common.add_to_playlist")}
+          title={t("common.add_to_playlist")}
+          disabled={!track}
+          onClick={handleAddToPlaylist}
+          className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full border border-white/10 bg-black/20 px-2 text-[11px] font-medium text-white/80 transition-colors hover:bg-white/10 active:scale-[0.97] disabled:opacity-40"
+        >
+          <LuPlus size={16} className="shrink-0" />
+          <span className="truncate">{t("common.add_to_playlist")}</span>
+        </button>
+        <button
+          type="button"
+          aria-label={t("common.add_to_queue")}
+          title={playbackControlLocked ? "Playback is controlled by the host" : t("common.add_to_queue")}
+          disabled={!track || !canEditQueue}
+          onClick={handleAddToQueue}
+          className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full border border-white/10 bg-black/20 px-2 text-[11px] font-medium text-white/80 transition-colors hover:bg-white/10 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <LuListPlus size={16} className="shrink-0" />
+          <span className="truncate">{t("common.add_to_queue")}</span>
+        </button>
+        <button
+          type="button"
+          aria-label={t("common.share")}
+          title={t("common.share")}
+          disabled={!track}
+          onClick={() => void handleShare()}
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-black/20 text-[11px] font-medium text-white/80 transition-colors hover:bg-white/10 active:scale-[0.97] disabled:opacity-40"
+        >
+          <LuShare2 size={16} />
+        </button>
       </div>
 
       {/* Timeline (Compact, with smooth spring pill, no thumb) */}
