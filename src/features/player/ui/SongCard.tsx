@@ -94,8 +94,6 @@ function SongCard({
   const currentTrackStyle: React.CSSProperties | undefined = isCurrentTrack
     ? {
         "--song-playing-accent": playbackAccent,
-        outline: "1px solid color-mix(in srgb, var(--song-playing-accent) 56%, transparent)",
-        outlineOffset: "-1px",
         backgroundColor: "color-mix(in srgb, var(--song-playing-accent) 8%, transparent)",
         boxShadow: "0 6px 24px color-mix(in srgb, var(--song-playing-accent) 10%, transparent)",
       } as React.CSSProperties
