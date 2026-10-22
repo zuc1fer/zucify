@@ -42,152 +42,7 @@ import { useCoverReady, CoverImage } from "@/features/covers";
 import { useCustomizationStore, getBlockStyle } from "@/features/settings";
 import ExplicitBadge from "@/shared/ui/ExplicitBadge";
 import { ArtistLink } from "@/features/artist";
-
-
-function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
-  r /= 255;
-  g /= 255;
-  b /= 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  let h = 0;
-  let s = 0;
-  const l = (max + min) / 2;
-
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    switch (max) {
-      case r:
-        h = (g - b) / d + (g < b ? 6 : 0);
-        break;
-      case g:
-        h = (b - r) / d + 2;
-        break;
-      case b:
-        h = (r - g) / d + 4;
-        break;
-    }
-    h /= 6;
-  }
-  return [h, s, l];
-}
-
-function hslToRgb(h: number, s: number, l: number): [number, number, number] {
-  let r: number, g: number, b: number;
-  if (s === 0) {
-    r = g = b = l;
-  } else {
-    const hue2rgb = (p: number, q: number, t: number) => {
-      if (t < 0) t += 1;
-      if (t > 1) t -= 1;
-      if (t < 1 / 6) return p + (q - p) * 6 * t;
-      if (t < 1 / 2) return q;
-      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-      return p;
-    };
-    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-    const p = 2 * l - q;
-    r = hue2rgb(p, q, h + 1 / 3);
-    g = hue2rgb(p, q, h);
-    b = hue2rgb(p, q, h - 1 / 3);
-  }
-  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
-}
-
-function extractColorsFromCanvas(
-  canvas: HTMLCanvasElement,
-  isLight = false,
-): {
-  accentColor: string;
-  accentColorSolid: string;
-} {
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) {
-    return {
-      accentColor: "rgba(255, 255, 255, 0.12)",
-      accentColorSolid: "rgb(255, 255, 255)",
-    };
-  }
-
-  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-  let totalWeight = 0;
-  let weightedR = 0;
-  let weightedG = 0;
-  let weightedB = 0;
-  let totalR = 0;
-  let totalG = 0;
-  let totalB = 0;
-  const count = data.length / 4;
-
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
-    totalR += r;
-    totalG += g;
-    totalB += b;
-
-    const [, s, l] = rgbToHsl(r, g, b);
-    if (l > 0.08 && l < 0.95 && s > 0.1) {
-      const vibrancy = s * (1 - Math.abs(l - 0.5) * 1.5);
-      const weight = Math.max(0.01, vibrancy * vibrancy);
-      weightedR += r * weight;
-      weightedG += g * weight;
-      weightedB += b * weight;
-      totalWeight += weight;
-    }
-  }
-
-  let finalR = Math.round(totalWeight > 0.5 ? weightedR / totalWeight : totalR / count);
-  let finalG = Math.round(totalWeight > 0.5 ? weightedG / totalWeight : totalG / count);
-  let finalB = Math.round(totalWeight > 0.5 ? weightedB / totalWeight : totalB / count);
-
-  const [h, s, l] = rgbToHsl(finalR, finalG, finalB);
-
-  if (isLight) {
-    if (s < 0.12) {
-      return {
-        accentColor: "rgba(0, 0, 0, 0.045)",
-        accentColorSolid: "rgb(30, 30, 30)",
-      };
-    }
-    // Luminous vibrant tint for light theme card progress fill
-    const tintL = 0.50;
-    const tintS = Math.max(0.80, s);
-    const [tintR, tintG, tintB] = hslToRgb(h, tintS, tintL);
-
-    // Deep high-contrast tone for bottom timeline line
-    const solidL = Math.max(0.36, Math.min(0.46, l > 0.55 ? 0.40 : l));
-    const solidS = Math.max(0.75, s);
-    const [solidR, solidG, solidB] = hslToRgb(h, solidS, solidL);
-
-    return {
-      accentColor: `rgba(${tintR}, ${tintG}, ${tintB}, 0.09)`,
-      accentColorSolid: `rgb(${solidR}, ${solidG}, ${solidB})`,
-    };
-  }
-
-  // If mostly achromatic / monochrome (black, white, or gray cover)
-  if (s < 0.12) {
-    return {
-      accentColor: l < 0.5 ? "rgba(255, 255, 255, 0.14)" : "rgba(255, 255, 255, 0.09)",
-      accentColorSolid: "rgb(255, 255, 255)",
-    };
-  }
-
-  // Ensure high contrast and vibrant visibility on dark backgrounds
-  const solidL = Math.max(0.65, Math.min(0.82, l < 0.45 ? 0.70 : l));
-  const solidS = Math.max(0.70, s);
-  const [solidR, solidG, solidB] = hslToRgb(h, solidS, solidL);
-
-  const bgOpacity = l < 0.25 ? 0.22 : l < 0.5 ? 0.18 : 0.12;
-
-  return {
-    accentColor: `rgba(${solidR}, ${solidG}, ${solidB}, ${bgOpacity})`,
-    accentColorSolid: `rgb(${solidR}, ${solidG}, ${solidB})`,
-  };
-}
+import { BRANDING_ACCENTS } from "../branding";
 
 export interface MiniPlayerProps {
   onQueueOpenChange?: (open: boolean) => void;
@@ -215,89 +70,13 @@ function MiniPlayer({
   const miniPlayerStyle = usePlayerStore((state) => state.miniPlayerStyle);
   const usesRoundedStyle = !embedded && miniPlayerStyle === "rounded";
   const usesBackgroundProgress = true;
+  const accentColorSolid = BRANDING_ACCENTS[player.accentVariant];
+  const accentColor = `color-mix(in srgb, ${accentColorSolid} 10%, transparent)`;
   const backgroundImage = useCustomizationStore((state) => state.backgroundImage);
   const miniplayerConfig = useCustomizationStore((state) => state.miniplayer);
   const hasCustomBg = Boolean(backgroundImage && !isLight);
   const miniplayerCustomStyle = getBlockStyle(miniplayerConfig, !isLight, hasCustomBg);
-  const [accentColor, setAccentColor] = useState(
-    isLight ? "rgba(0, 0, 0, 0.06)" : "rgba(255, 255, 255, 0.12)",
-  );
-
-  const [accentColorSolid, setAccentColorSolid] = useState(
-    isLight ? "rgb(23, 23, 23)" : "rgb(255, 255, 255)",
-  );
-  const [contextAccentColorSolid, setContextAccentColorSolid] = useState(
-    isLight ? "rgb(23, 23, 23)" : "rgb(255, 255, 255)",
-  );
-
   const coverUrl = player.currentTrack?.coverUrl || "";
-
-  useEffect(() => {
-    if (!player.playbackContextCover) {
-      return;
-    }
-    const img = new window.Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      try {
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        if (!ctx) return;
-        canvas.width = 64;
-        canvas.height = 64;
-        ctx.drawImage(img, 0, 0, 64, 64);
-        const { accentColorSolid: acs } = extractColorsFromCanvas(canvas, isLight);
-        setContextAccentColorSolid(acs);
-      } catch {
-        setContextAccentColorSolid(isLight ? "rgb(23, 23, 23)" : "rgb(255, 255, 255)");
-      }
-    };
-    img.src = player.playbackContextCover;
-  }, [player.playbackContextCover, isLight]);
-
-  useEffect(() => {
-    if (!coverUrl) {
-      setAccentColor(isLight ? "rgba(0, 0, 0, 0.06)" : "rgba(255, 255, 255, 0.12)");
-      setAccentColorSolid(isLight ? "rgb(23, 23, 23)" : "rgb(255, 255, 255)");
-      return;
-    }
-    const img = new window.Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = 64;
-        canvas.height = 64;
-        const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        if (!ctx) return;
-        ctx.drawImage(img, 0, 0, 64, 64);
-        const { accentColor: ac, accentColorSolid: acs } = extractColorsFromCanvas(canvas, isLight);
-        setAccentColor(ac);
-        setAccentColorSolid(acs);
-      } catch {
-        setAccentColor(isLight ? "rgba(0, 0, 0, 0.06)" : "rgba(255, 255, 255, 0.12)");
-        setAccentColorSolid(isLight ? "rgb(23, 23, 23)" : "rgb(255, 255, 255)");
-      }
-    };
-    img.src = coverUrl;
-  }, [coverUrl, isLight]);
-
-  const extractAccentColor = useCallback((img: HTMLImageElement) => {
-    try {
-      const canvas = document.createElement("canvas");
-      canvas.width = 64;
-      canvas.height = 64;
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
-      if (!ctx) return;
-      ctx.drawImage(img, 0, 0, 64, 64);
-      const { accentColor: ac, accentColorSolid: acs } = extractColorsFromCanvas(canvas, isLight);
-      setAccentColor(ac);
-      setAccentColorSolid(acs);
-    } catch {
-      setAccentColor(isLight ? "rgba(0, 0, 0, 0.06)" : "rgba(255, 255, 255, 0.12)");
-      setAccentColorSolid(isLight ? "rgb(23, 23, 23)" : "rgb(255, 255, 255)");
-    }
-  }, [isLight]);
 
   const [queueLimit, setQueueLimit] = useState(50);
   const [volumeOpen, setVolumeOpen] = useState(false);
@@ -715,8 +494,7 @@ function MiniPlayer({
               onSeek={(pos) => playerEngine.seek(pos)}
               disabled={playbackControlLocked}
               size="xs"
-              fillColor={accentColorSolid || undefined}
-              fillClassName={!accentColorSolid ? (isLight ? "bg-text-primary" : "bg-white") : undefined}
+              fillColor={accentColorSolid}
               trackBg={isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.15)"}
               trackActiveBg={isLight ? "rgba(0, 0, 0, 0.16)" : "rgba(255, 255, 255, 0.32)"}
               className="!h-[14px]"
@@ -749,9 +527,6 @@ function MiniPlayer({
                 height={38}
                 priority
                 draggable={false}
-                onLoad={(e) => {
-                  extractAccentColor(e.currentTarget as HTMLImageElement);
-                }}
                 className="h-[38px] w-[38px] object-cover rounded-[8px]"
               />
             </div>

@@ -2,27 +2,12 @@ import { memo, useCallback, useMemo, useState } from "react";
 import SongCard from "./SongCard";
 import { useSongMenuItems } from "../hooks/useSongMenuItems";
 import { playerEngine } from "../engine/playerEngine";
-import { usePlayerStore, type AccentVariant } from "../store/playerStore";
+import { usePlayerStore } from "../store/playerStore";
+import { BRANDING_ACCENTS } from "../branding";
 import { useToast } from "@/shared/ui";
 import { useTranslation } from "@/languages";
 
 import type { TrackArtist } from "@/shared/types";
-
-const BRANDING_ACCENTS: Record<AccentVariant, string> = {
-  default: "var(--accent-primary)",
-  spotify: "#1DB954",
-  discord: "#5865F2",
-  telegram: "#0088CC",
-  aurora: "#a855f7",
-  sunset: "#fb923c",
-  ocean: "#2563eb",
-  forest: "#059669",
-  berry: "#db2777",
-  carbon: "var(--text-primary)",
-  pixel: "var(--text-primary)",
-  scanlines: "var(--text-primary)",
-  vhs: "#ff00ff",
-};
 
 export interface SongCardWithMenuProps {
   id?: string;

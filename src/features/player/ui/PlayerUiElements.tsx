@@ -26,6 +26,7 @@ import { VolumePicker } from "./VolumePicker";
 import { TimelineSlider } from "./TimelineSlider";
 
 import { useTranslation } from "@/languages";
+import { BRANDING_ACCENTS } from "../branding";
 
 const iconButtonClass =
   "inline-flex h-[28px] w-[28px] items-center justify-center text-white opacity-70 transition-all duration-150 ease-out hover:opacity-100 active:scale-[0.94] shrink-0 border-none bg-transparent cursor-pointer";
@@ -204,6 +205,7 @@ export function PlayerUiElements({
         showTime
         size="md"
         className="w-[320px]"
+        fillColor={BRANDING_ACCENTS[player.accentVariant]}
       />
 
       {/* Primary Playback Controls */}
