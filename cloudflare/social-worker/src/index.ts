@@ -14,6 +14,7 @@ interface SocialUser {
 const ROOM_RECONNECT_GRACE_MS = 60_000;
 const MAX_PLAYLIST_TRACKS = 250;
 const MAX_PLAYLIST_MEMBERS = 25;
+const TRACK_REACTION_EMOJIS = new Set(["❤️", "🔥", "😍", "😂", "👏"]);
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -207,21 +208,43 @@ async function playlists(env: Env, userId: string): Promise<Response> {
   ).bind(userId).all();
   const items = [];
   for (const row of result.results ?? []) {
-    const [members, tracks] = await Promise.all([
+    const [members, tracks, reactionRows] = await Promise.all([
       env.DB.prepare(
         `SELECT u.id, u.username, u.display_name AS displayName, u.avatar_url AS avatarUrl
          FROM shared_playlist_members m LEFT JOIN social_users u ON u.id = m.user_id
          WHERE m.playlist_id = ? ORDER BY m.added_at`,
       ).bind(row.id).all(),
       env.DB.prepare(
-        "SELECT id, added_by AS addedBy, track_json AS trackJson, created_at AS createdAt FROM shared_playlist_tracks WHERE playlist_id = ? ORDER BY position, created_at LIMIT ?",
+        `SELECT t.id, t.added_by AS addedBy, t.track_json AS trackJson, t.created_at AS createdAt,
+           adder.id AS addedByUserId, adder.username AS addedByUsername,
+           adder.display_name AS addedByDisplayName, adder.avatar_url AS addedByAvatarUrl
+         FROM shared_playlist_tracks t LEFT JOIN social_users adder ON adder.id = t.added_by
+         WHERE t.playlist_id = ? ORDER BY t.position, t.created_at LIMIT ?`,
       ).bind(row.id, MAX_PLAYLIST_TRACKS).all(),
+      env.DB.prepare(
+        `SELECT track_id AS trackId, emoji, COUNT(*) AS count,
+           MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) AS reactedByMe
+         FROM shared_playlist_track_reactions WHERE playlist_id = ? GROUP BY track_id, emoji`,
+      ).bind(userId, row.id).all(),
     ]);
+    const reactionsByTrack = new Map<string, { emoji: string; count: number; reactedByMe: boolean }[]>();
+    for (const reaction of reactionRows.results ?? []) {
+      const reactions = reactionsByTrack.get(reaction.trackId) ?? [];
+      reactions.push({ emoji: reaction.emoji, count: Number(reaction.count), reactedByMe: Boolean(reaction.reactedByMe) });
+      reactionsByTrack.set(reaction.trackId, reactions);
+    }
     items.push({
       ...row,
       members: members.results ?? [],
       tracks: (tracks.results ?? []).map((track: any) => ({
         id: track.id, addedBy: track.addedBy, createdAt: track.createdAt, track: safeParse(track.trackJson),
+        addedByUser: track.addedByUserId ? {
+          id: track.addedByUserId,
+          username: track.addedByUsername,
+          displayName: track.addedByDisplayName,
+          avatarUrl: track.addedByAvatarUrl,
+        } : null,
+        reactions: reactionsByTrack.get(track.id) ?? [],
       })),
     });
   }
@@ -443,7 +466,49 @@ async function handleApi(request: Request, env: Env, user: SocialUser): Promise<
     await env.DB.prepare(
       "INSERT INTO shared_playlist_tracks (id, playlist_id, added_by, position, track_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
     ).bind(id, playlistId, user.id, Number(last?.position ?? -1) + 1, JSON.stringify(track), now).run();
-    return json({ id, addedBy: user.id, track, createdAt: now }, 201);
+    return json({
+      id,
+      addedBy: user.id,
+      addedByUser: user,
+      createdAt: now,
+      track,
+      reactions: [],
+    }, 201);
+  }
+
+  const playlistTrackReactionPath = path.match(/^\/api\/playlists\/([^/]+)\/tracks\/([^/]+)\/reactions$/);
+  if (method === "POST" && playlistTrackReactionPath) {
+    const playlistId = decodeURIComponent(playlistTrackReactionPath[1]);
+    const trackId = decodeURIComponent(playlistTrackReactionPath[2]);
+    const denied = await requirePlaylistMember(env, playlistId, user.id);
+    if (denied) return denied;
+    const body = await request.json().catch(() => null) as any;
+    const emoji = string(body?.emoji, 16);
+    if (!emoji || !TRACK_REACTION_EMOJIS.has(emoji)) return error("Choose one of the available reactions.");
+    if (typeof body?.reacted !== "boolean") return error("Choose whether to add or remove this reaction.");
+    const track = await env.DB.prepare(
+      "SELECT 1 AS ok FROM shared_playlist_tracks WHERE id = ? AND playlist_id = ?",
+    ).bind(trackId, playlistId).first();
+    if (!track) return error("That song is no longer in this playlist.", 404);
+    if (body.reacted) {
+      await env.DB.prepare(
+        "INSERT OR IGNORE INTO shared_playlist_track_reactions (playlist_id, track_id, user_id, emoji, created_at) VALUES (?, ?, ?, ?, ?)",
+      ).bind(playlistId, trackId, user.id, emoji, Date.now()).run();
+    } else {
+      await env.DB.prepare(
+        "DELETE FROM shared_playlist_track_reactions WHERE playlist_id = ? AND track_id = ? AND user_id = ? AND emoji = ?",
+      ).bind(playlistId, trackId, user.id, emoji).run();
+    }
+    const reactions = await env.DB.prepare(
+      `SELECT emoji, COUNT(*) AS count,
+         MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) AS reactedByMe
+       FROM shared_playlist_track_reactions WHERE track_id = ? GROUP BY emoji ORDER BY emoji`,
+    ).bind(user.id, trackId).all();
+    return json({ reactions: (reactions.results ?? []).map((reaction: any) => ({
+      emoji: reaction.emoji,
+      count: Number(reaction.count),
+      reactedByMe: Boolean(reaction.reactedByMe),
+    })) });
   }
 
   const deleteTrackPath = path.match(/^\/api\/playlists\/([^/]+)\/tracks\/([^/]+)$/);

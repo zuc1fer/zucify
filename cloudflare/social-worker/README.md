@@ -1,6 +1,6 @@
 # Zucify Friends service
 
-This Cloudflare Worker stores friend requests, messages, shared playlists, and listening-room state. Music and Liner accounts remain on the existing Liner API. The Worker checks each request's Liner access token with `/v1/me`; it does not store access or refresh tokens. People become searchable after opening Friends in Zucify once, which registers their public profile in the social directory. Accepted friends can message each other, and playlist access is limited to playlist members.
+This Cloudflare Worker stores friend requests, messages, shared playlists, per-song reactions, and listening-room state. Shared playlist tracks show who added them. Music and Liner accounts remain on the existing Liner API. The Worker checks each request's Liner access token with `/v1/me`; it does not store access or refresh tokens. People become searchable after opening Friends in Zucify once, which registers their public profile in the social directory. Accepted friends can message each other, and playlist access is limited to playlist members.
 
 ## Deploy to your Cloudflare account
 

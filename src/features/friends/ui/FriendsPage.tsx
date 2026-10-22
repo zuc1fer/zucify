@@ -15,14 +15,17 @@ import {
 import Button from "@/shared/ui/Button";
 import TextInput from "@/shared/ui/TextInput";
 import UserAvatar from "@/shared/ui/UserAvatar";
+import TrackReactions from "./TrackReactions";
 import {
   isSocialApiConfigured,
   socialApi,
   type FriendRequest,
   type ListeningSession,
   type SharedPlaylist,
+  type SharedPlaylistTrack,
   type SocialMessage,
   type SocialPerson,
+  type TrackReactionEmoji,
 } from "../socialApi";
 
 type PageTab = "people" | "messages" | "playlists" | "listening";
@@ -41,6 +44,12 @@ function messageTime(timestamp: number): string {
 
 function trackLine(track?: { title?: string; artists?: string } | null): string {
   return track ? `${track.title} · ${track.artists}` : "No song selected";
+}
+
+function addedByName(item: SharedPlaylistTrack, currentUser?: SocialPerson | null): string {
+  if (item.addedByUser) return personName(item.addedByUser);
+  if (currentUser?.id === item.addedBy) return personName(currentUser);
+  return "a playlist member";
 }
 
 function ErrorNotice({ children }: { children: ReactNode }) {
@@ -294,6 +303,27 @@ export default function FriendsPage() {
     await runAction(() => socialApi.addTrack(playlist.id, currentTrack), `Added “${currentTrack.title}” to ${playlist.title}.`);
   };
 
+  const setTrackReaction = async (
+    playlist: SharedPlaylist,
+    item: SharedPlaylistTrack,
+    emoji: TrackReactionEmoji,
+    reacted: boolean,
+  ) => {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await socialApi.setTrackReaction(playlist.id, item.id, emoji, reacted);
+      setPlaylists((current) => current.map((entry) => entry.id !== playlist.id ? entry : {
+        ...entry,
+        tracks: entry.tracks.map((track) => track.id === item.id ? { ...track, reactions: result.reactions } : track),
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update that reaction.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const sharePlaylist = async (playlist: SharedPlaylist) => {
     if (!selectedFriendId) return;
     await runAction(() => socialApi.sendPlaylist(selectedFriendId, playlist.id), `Shared ${playlist.title} in your chat.`);
@@ -510,10 +540,10 @@ export default function FriendsPage() {
               <Button size="sm" variant="ghost" onClick={() => void addCurrentTrack(playlist)} disabled={busy || !currentTrack}>Add current song</Button>
             </div>
             {playlist.tracks.length === 0 ? <p className="m-[15px] text-[12px] text-text-tertiary">No songs yet. Play a song, then add it here.</p> : <div className="divide-y divide-border-primary">
-              {playlist.tracks.map((item, index) => <div key={item.id} className="flex items-center gap-[11px] px-[14px] py-[9px]">
-                <span className="w-[18px] text-center text-[11px] text-text-tertiary">{index + 1}</span><button className="flex min-w-0 flex-1 items-center gap-[10px] border-0 bg-transparent p-0 text-left" onClick={() => void playerEngine.playTrack(item.track, playlist.tracks.map((entry) => entry.track), `shared:${playlist.id}`)}>
-                  <img src={item.track.coverUrl || ""} alt="" className="h-[38px] w-[38px] rounded object-cover" /><span className="min-w-0"><span className="block truncate text-[13px] text-text-primary">{item.track.title}</span><span className="block truncate text-[11px] text-text-tertiary">{item.track.artists}</span></span>
-                </button><Button size="sm" variant="ghost" onClick={() => void runAction(() => socialApi.removeTrack(playlist.id, item.id), "Song removed from the shared playlist.")} disabled={busy}>Remove</Button>
+              {playlist.tracks.map((item, index) => <div key={item.id} className="flex flex-wrap items-center gap-[8px] px-[14px] py-[9px]">
+                <span className="w-[18px] text-center text-[11px] text-text-tertiary">{index + 1}</span><button className="flex min-w-[180px] flex-1 items-center gap-[10px] border-0 bg-transparent p-0 text-left" onClick={() => void playerEngine.playTrack(item.track, playlist.tracks.map((entry) => entry.track), `shared:${playlist.id}`)}>
+                  <img src={item.track.coverUrl || ""} alt="" className="h-[38px] w-[38px] rounded object-cover" /><span className="min-w-0"><span className="block truncate text-[13px] text-text-primary">{item.track.title}</span><span className="block truncate text-[11px] text-text-tertiary">{item.track.artists}</span><span className="block truncate text-[10px] text-text-tertiary">Added by {addedByName(item, user)}</span></span>
+                </button><TrackReactions title={item.track.title} reactions={item.reactions ?? []} disabled={busy} onReaction={(emoji, reacted) => void setTrackReaction(playlist, item, emoji, reacted)} /><Button size="sm" variant="ghost" onClick={() => void runAction(() => socialApi.removeTrack(playlist.id, item.id), "Song removed from the shared playlist.")} disabled={busy}>Remove</Button>
               </div>)}
             </div>}
           </div>)}

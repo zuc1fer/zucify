@@ -27,11 +27,22 @@ export interface SocialMessage {
   createdAt: number;
 }
 
+export const TRACK_REACTION_EMOJIS = ["❤️", "🔥", "😍", "😂", "👏"] as const;
+export type TrackReactionEmoji = (typeof TRACK_REACTION_EMOJIS)[number];
+
+export interface TrackReaction {
+  emoji: TrackReactionEmoji;
+  count: number;
+  reactedByMe: boolean;
+}
+
 export interface SharedPlaylistTrack {
   id: string;
   addedBy: string;
+  addedByUser?: SocialPerson | null;
   createdAt: number;
   track: Track;
+  reactions: TrackReaction[];
 }
 
 export interface SharedPlaylist {
@@ -138,6 +149,8 @@ export const socialApi = {
   createPlaylist: (title: string, memberIds: string[]) => post<{ id: string }>("/api/playlists", { title, memberIds }),
   addPlaylistMember: (playlistId: string, memberId: string) => post<{ ok: boolean }>(`/api/playlists/${encodeURIComponent(playlistId)}/members`, { memberId }),
   addTrack: (playlistId: string, track: Track) => post<SharedPlaylistTrack>(`/api/playlists/${encodeURIComponent(playlistId)}/tracks`, { track }),
+  setTrackReaction: (playlistId: string, itemId: string, emoji: TrackReactionEmoji, reacted: boolean) =>
+    post<{ reactions: TrackReaction[] }>(`/api/playlists/${encodeURIComponent(playlistId)}/tracks/${encodeURIComponent(itemId)}/reactions`, { emoji, reacted }),
   removeTrack: (playlistId: string, itemId: string) => request<{ ok: boolean }>(`/api/playlists/${encodeURIComponent(playlistId)}/tracks/${encodeURIComponent(itemId)}`, { method: "DELETE" }),
   getSessions: () => request<{ items: ListeningSession[] }>("/api/sessions").then((result) => result.items),
   createSession: (guestId: string, track: Track, positionMs = 0, playbackStatus: "playing" | "paused" = "playing") => post<ListeningSession>("/api/sessions", { guestId, track, positionMs, playbackStatus }),
