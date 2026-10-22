@@ -173,6 +173,23 @@ async function friends(env: Env, userId: string): Promise<Response> {
   return json({ items: result.results ?? [] });
 }
 
+async function searchPeople(env: Env, userId: string, query: string | null): Promise<Response> {
+  const term = string(query, 100);
+  if (!term || term.length < 2) return json({ items: [] });
+  const result = await env.DB.prepare(
+    `SELECT id, username, display_name AS displayName, avatar_url AS avatarUrl
+     FROM social_users
+     WHERE id != ? AND (
+       instr(lower(COALESCE(username, '')), lower(?)) > 0 OR
+       instr(lower(COALESCE(display_name, '')), lower(?)) > 0
+     )
+     ORDER BY CASE WHEN lower(username) = lower(?) THEN 0 ELSE 1 END,
+       COALESCE(display_name, username, id) COLLATE NOCASE
+     LIMIT 25`,
+  ).bind(userId, term, term, term).all();
+  return json({ items: result.results ?? [] });
+}
+
 async function requests(env: Env, userId: string): Promise<Response> {
   const result = await env.DB.prepare(
     `SELECT * FROM friend_requests WHERE status = 'pending' AND (from_id = ? OR to_id = ?)
@@ -249,6 +266,7 @@ async function handleApi(request: Request, env: Env, user: SocialUser): Promise<
     return json({ friends: friendData.items, requests: requestData.items, playlists: playlistData.items, sessions: sessionData.items });
   }
   if (method === "GET" && path === "/api/friends") return friends(env, user.id);
+  if (method === "GET" && path === "/api/people") return searchPeople(env, user.id, url.searchParams.get("q"));
   if (method === "GET" && path === "/api/requests") return requests(env, user.id);
   if (method === "GET" && path === "/api/playlists") return playlists(env, user.id);
   if (method === "GET" && path === "/api/sessions") return listeningSessions(env, user.id);

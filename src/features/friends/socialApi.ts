@@ -124,6 +124,7 @@ function post<T>(path: string, body?: unknown): Promise<T> {
 
 export const socialApi = {
   getOverview: () => request<SocialOverview>("/api/overview"),
+  searchPeople: (query: string) => request<{ items: SocialPerson[] }>(`/api/people?q=${encodeURIComponent(query)}`).then((result) => result.items),
   getFriends: () => request<{ items: SocialPerson[] }>("/api/friends").then((result) => result.items),
   getRequests: () => request<{ items: FriendRequest[] }>("/api/requests").then((result) => result.items),
   sendFriendRequest: (user: SocialPerson) => post<{ id: string; status: string }>("/api/requests", { user }),

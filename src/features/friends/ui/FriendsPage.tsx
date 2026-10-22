@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { GroupFill, UserAddFill } from "@mingcute/react";
-import { api } from "@/shared/api";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { playerEngine } from "@/features/player";
 import { usePlayerStore } from "@/features/player/store/playerStore";
@@ -164,7 +163,7 @@ export default function FriendsPage() {
       setSearchLoading(true);
       setSearchError("");
       try {
-        const results = await api.searchUsers(query);
+        const results = await socialApi.searchPeople(query);
         if (!cancelled) setSearchResults(results.filter((person) => person.id !== user?.id));
       } catch (err) {
         if (!cancelled) {
@@ -429,9 +428,10 @@ export default function FriendsPage() {
         {!loading && activeTab === "people" && <section className="flex flex-col gap-[22px]">
           <div className="rounded-xl border border-border-primary bg-bg-panel p-[18px]">
             <div className="mb-[12px] flex items-center gap-[9px]"><UserAddFill size={19} className="text-text-secondary" /><h2 className="m-0 text-[16px] font-medium text-text-primary">Find people</h2></div>
-            <TextInput value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search by username or name" aria-label="Search people" />
+            <TextInput value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search Zucify username or name" aria-label="Search people" />
+            <p className="mb-0 mt-[8px] text-[11px] text-text-tertiary">People appear after they open Friends in Zucify once.</p>
             <div className="mt-[12px] flex flex-col gap-[8px]">
-              {searchLoading && <p className="m-0 text-[12px] text-text-tertiary">Searching Liner users…</p>}
+              {searchLoading && <p className="m-0 text-[12px] text-text-tertiary">Searching Zucify listeners…</p>}
               {searchError && <p role="alert" className="m-0 text-[12px] text-red-500">{searchError}</p>}
               {!searchLoading && !searchError && searchQuery.trim().length >= 2 && searchResults.length === 0 && <p className="m-0 text-[12px] text-text-tertiary">No matching people found.</p>}
               {searchResults.map((person) => {
