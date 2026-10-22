@@ -355,7 +355,7 @@ function MiniPlayer({
   return (
     <div
       ref={miniPlayerRootRef}
-      className="relative h-[64px] w-full select-none"
+      className="relative h-[64px] w-full select-none max-md:rounded-none"
     >
       <AnimatePresence>
         {volumeOpen && (
@@ -406,7 +406,7 @@ function MiniPlayer({
       </AnimatePresence>
 
       <div
-        className={`relative h-[64px] w-full overflow-hidden cursor-pointer ${
+        className={`relative h-[64px] w-full overflow-hidden cursor-pointer max-md:rounded-none ${
           usesRoundedStyle
             ? `rounded-full border-[0.5px] border-border-tertiary ${
                 hasCustomBg ? "" : "bg-bg-primary"
@@ -504,11 +504,11 @@ function MiniPlayer({
         <div
           className={`relative grid h-full pointer-events-none ${
             embedded
-              ? "grid-cols-[280px_minmax(0,1fr)_260px]"
+              ? "grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[280px_minmax(0,1fr)_260px]"
               : "grid-cols-[286px_minmax(0,1fr)]"
           } ${!usesRoundedStyle && !embedded ? "pb-[4px]" : ""}`}
         >
-          <div className="flex h-full items-center gap-[16px] px-[18px] pt-[1px] pointer-events-none cursor-default">
+          <div className="flex h-full min-w-0 items-center gap-[8px] px-[10px] pt-[1px] pr-[104px] pointer-events-none cursor-default md:gap-[16px] md:px-[18px]">
             <div
               role="button"
               tabIndex={0}
@@ -575,7 +575,7 @@ function MiniPlayer({
             <button
               type="button"
               aria-label={isLiked ? "Unlike" : "Like"}
-              className={`${iconButtonClass} shrink-0 transition-colors duration-150 pointer-events-auto prevent-seek ${
+              className={`${iconButtonClass} hidden shrink-0 transition-colors duration-150 pointer-events-auto prevent-seek md:inline-flex ${
                 isLiked ? "text-accent-primary" : "text-text-secondary hover:text-text-primary"
               }`}
               onPointerDown={(e) => e.stopPropagation()}
@@ -587,8 +587,8 @@ function MiniPlayer({
           </div>
 
           <div
-            className={`flex h-full items-center pl-[10px] pr-[18px] pointer-events-none ${
-              embedded ? "col-start-3" : ""
+            className={`flex h-full items-center pl-[10px] pr-[18px] pointer-events-none max-md:hidden ${
+              embedded ? "col-start-2 md:col-start-3" : ""
             }`}
           >
             <div
@@ -728,7 +728,7 @@ function MiniPlayer({
           </div>
         </div>
 
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center max-md:justify-end max-md:pr-[8px]">
           <div
             className="pointer-events-auto flex items-center gap-[8px] prevent-seek cursor-default"
             onPointerDown={(e) => e.stopPropagation()}

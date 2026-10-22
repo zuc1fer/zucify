@@ -3,6 +3,7 @@ import { LuMinus, LuSquare, LuX } from "react-icons/lu";
 import { useIsContentTransparent } from "@/features/settings/store/customizationStore";
 import { useWindowState } from "../hooks/useWindowState";
 import { useWindowAnimationStore } from "@/shared/ui";
+import { Capacitor } from "@capacitor/core";
 
 export interface WindowControlsProps {
   className?: string;
@@ -47,6 +48,10 @@ export default function WindowControls({
   const { isFullScreen: isWindowFullScreen, isMaximized: isWindowMaximized } = useWindowState();
 
   const isHyprland = window.linerElectron?.isHyprland ?? false;
+  const hasCustomBg = useIsContentTransparent();
+  const isGlass = hasCustomBg || variant === "glass";
+
+  if (Capacitor.isNativePlatform()) return null;
 
   const handleMinimize = () => {
     // macos fullscreen spaces and hyprland tiling wm prohibit/ignore minimizing
@@ -65,8 +70,6 @@ export default function WindowControls({
 
   const isDarkMode = isFullscreen;
   const isMinimizeDisabled = isWindowFullScreen || isHyprland;
-  const hasCustomBg = useIsContentTransparent();
-  const isGlass = hasCustomBg || variant === "glass";
 
   return (
     <div

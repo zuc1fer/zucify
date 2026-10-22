@@ -406,14 +406,14 @@ export function FullscreenPlayer({
 
       <div className="absolute inset-0 z-[1] bg-black/40" />
 
-      <div className="absolute inset-0 z-10 flex">
-        <div className="flex-1 flex flex-col items-center justify-center gap-5">
+      <div className="absolute inset-0 z-10 flex max-md:flex-col">
+        <div className="flex-1 flex flex-col items-center justify-center gap-5 max-md:h-[58%] max-md:flex-none max-md:gap-2 max-md:pt-[calc(env(safe-area-inset-top)+20px)] max-md:pb-2">
           <PlayerUiElements onClose={onClose} />
         </div>
 
-        <div className="flex-1 h-full min-h-0 pl-2 pr-6 flex flex-col relative">
+        <div className="relative flex h-full min-h-0 flex-1 flex-col pl-2 pr-6 max-md:h-auto max-md:w-full max-md:px-4 max-md:pb-[env(safe-area-inset-bottom)]">
           {showProviderIsland && (
-            <div className="absolute top-[12px] left-1/2 -translate-x-1/2 z-30 pointer-events-none flex justify-center">
+            <div className="absolute top-[12px] left-1/2 -translate-x-1/2 z-30 pointer-events-none flex justify-center max-md:top-[4px]">
               <LyricsProviderIsland />
             </div>
           )}
@@ -518,7 +518,7 @@ export function FullscreenPlayer({
         aria-label={t("player.close_fullscreen")}
         onClick={onClose}
         data-no-window-drag
-        className="absolute top-[12px] left-[12px] z-30 inline-flex h-[32px] w-[32px] items-center justify-center rounded-lg border-none bg-black/50 backdrop-blur-xl text-white/80 hover:text-white hover:bg-white/10 active:scale-[0.94] transition-all cursor-pointer select-none pointer-events-auto"
+        className="absolute top-[calc(12px+env(safe-area-inset-top))] left-[calc(12px+env(safe-area-inset-left))] z-30 inline-flex h-[32px] w-[32px] items-center justify-center rounded-lg border-none bg-black/50 backdrop-blur-xl text-white/80 hover:text-white hover:bg-white/10 active:scale-[0.94] transition-all cursor-pointer select-none pointer-events-auto"
       >
         <DownLine size={18} />
       </button>

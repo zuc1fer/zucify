@@ -19,6 +19,7 @@ import {
   PlaylistFill,
 } from "@mingcute/react";
 import Sidebar from "./Sidebar";
+import MobileNavigation from "./MobileNavigation";
 import WindowControls from "./WindowControls";
 import PageTransition from "./PageTransition";
 import RightDrawer from "./RightDrawer";
@@ -62,8 +63,6 @@ interface AppFrameProps {
 }
 
 const RIGHT_DRAWER_WIDTH = 440;
-const SIDEBAR_WIDTH = 58;
-const SHELL_EDGE_GAP = 12;
 const SEARCH_QUERY_CACHE_TTL_MS = 60_000;
 const LEGACY_LAYOUT_STORAGE_KEYS = [
   "liner_right_sidebar",
@@ -685,9 +684,9 @@ export default function AppFrame({ children }: AppFrameProps) {
     <div
       ref={appFrameRef}
       data-custom-bg={hasCustomBg ? "true" : undefined}
-      className={`relative flex flex-row h-full w-full overflow-hidden ${
+      className={`relative flex h-full w-full flex-col overflow-hidden md:flex-row ${
         isEdgeToEdge ? "rounded-none p-0" : "rounded-5xl p-1.5"
-      } bg-bg-canvas gap-1.5`}
+      } max-md:rounded-none max-md:p-0 bg-bg-canvas gap-1.5 max-md:gap-0`}
       onScroll={(e) => {
         if (e.currentTarget.scrollLeft !== 0) e.currentTarget.scrollLeft = 0;
         if (e.currentTarget.scrollTop !== 0) e.currentTarget.scrollTop = 0;
@@ -720,7 +719,7 @@ export default function AppFrame({ children }: AppFrameProps) {
 
       <aside
         ref={sidebarRef}
-        className="w-[58px] h-full shrink-0 z-[45] relative"
+        className="relative z-[45] hidden h-full w-[58px] shrink-0 md:block"
       >
         <Sidebar
           searchOpen={searchOpen}
@@ -729,16 +728,16 @@ export default function AppFrame({ children }: AppFrameProps) {
         />
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0 h-full relative gap-1.5 overflow-hidden">
+      <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col gap-1.5 overflow-hidden max-md:h-auto max-md:gap-0">
         <main
           data-custom-bg={hasCustomBg ? "true" : undefined}
-          className={`flex-1 min-w-0 flex flex-col relative h-full ${
+          className={`relative flex h-full min-h-0 min-w-0 flex-1 flex-col max-md:h-auto ${
             hasCustomBg ? "" : "bg-bg-primary"
           } rounded-sm ${
             isFullscreenPlayer || isEdgeToEdge
               ? "rounded-tr-none"
               : "rounded-tr-xl"
-          } overflow-hidden`}
+          } overflow-hidden max-md:rounded-none`}
           style={mainStyle}
         >
           <div
@@ -778,8 +777,7 @@ export default function AppFrame({ children }: AppFrameProps) {
                   animate={{ x: 0 }}
                   exit={{ x: RIGHT_DRAWER_WIDTH }}
                   transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                  className="pointer-events-auto absolute inset-y-0 right-0 z-[50]"
-                  style={{ width: RIGHT_DRAWER_WIDTH }}
+                  className="pointer-events-auto absolute inset-y-0 right-0 z-[50] w-[min(440px,100vw)]"
                 >
                   <RightDrawer
                     activeTab={rightDrawerTab}
@@ -809,6 +807,8 @@ export default function AppFrame({ children }: AppFrameProps) {
           </div>
         )}
       </div>
+
+      <MobileNavigation searchOpen={searchOpen} onSearchToggle={handleSearchToggle} />
 
       <AnimatePresence initial={false}>
         {fullscreenPlayerOpen ? (
@@ -843,16 +843,14 @@ export default function AppFrame({ children }: AppFrameProps) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -12, scale: 0.99 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            className={`absolute right-0 z-[60] flex flex-col items-center pointer-events-none pt-[56px]`}
+            className={`absolute left-0 right-0 z-[60] flex flex-col items-center pointer-events-none pt-[56px] md:left-[70px] md:right-[12px]`}
             style={{
-              left: SIDEBAR_WIDTH + SHELL_EDGE_GAP,
-              right: SHELL_EDGE_GAP,
               top: 12,
             }}
           >
             {/* 1. Search Input Island */}
             <div
-              className="w-[min(660px,calc(100vw-72px))] h-[54px] rounded-[8px] pointer-events-auto flex items-center px-[18px] gap-[14px] bg-bg-panel/95 border border-border-primary/50 backdrop-blur-2xl"
+              className="w-[min(660px,calc(100vw-72px))] max-md:w-[calc(100vw-24px)] h-[54px] rounded-[8px] pointer-events-auto flex items-center px-[18px] gap-[14px] bg-bg-panel/95 border border-border-primary/50 backdrop-blur-2xl"
             >
               <span className="shrink-0 flex items-center justify-center text-text-tertiary">
                 <AnimatePresence mode="wait" initial={false}>
@@ -933,7 +931,7 @@ export default function AppFrame({ children }: AppFrameProps) {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -6, scale: 0.99 }}
                   transition={{ duration: 0.1, ease: [0.16, 1, 0.3, 1] }}
-                  className="w-[min(660px,calc(100vw-72px))] mt-[8px] max-h-[500px] h-[500px] rounded-[8px] pointer-events-auto flex flex-col overflow-hidden bg-bg-panel/95 border border-border-primary/50 backdrop-blur-2xl"
+                  className="w-[min(660px,calc(100vw-72px))] max-md:w-[calc(100vw-24px)] mt-[8px] max-h-[500px] h-[500px] max-md:h-[calc(100dvh-190px)] max-md:max-h-[calc(100dvh-190px)] rounded-[8px] pointer-events-auto flex flex-col overflow-hidden bg-bg-panel/95 border border-border-primary/50 backdrop-blur-2xl"
                 >
                   <div className="flex gap-[6px] px-[14px] pt-[12px] pb-[6px] shrink-0 overflow-x-auto">
                     {filterKeys.map((key) => {
@@ -1046,7 +1044,7 @@ export default function AppFrame({ children }: AppFrameProps) {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -6, scale: 0.99 }}
                   transition={{ duration: 0.1, ease: [0.16, 1, 0.3, 1] }}
-                  className="w-[min(660px,calc(100vw-72px))] mt-[8px] max-h-[480px] h-auto rounded-[8px] pointer-events-auto flex flex-col overflow-hidden bg-bg-panel/95 border border-border-primary/50 backdrop-blur-2xl"
+                  className="w-[min(660px,calc(100vw-72px))] max-md:w-[calc(100vw-24px)] mt-[8px] max-h-[480px] h-auto rounded-[8px] pointer-events-auto flex flex-col overflow-hidden bg-bg-panel/95 border border-border-primary/50 backdrop-blur-2xl"
                 >
                   <SearchHistoryList
                     onSelectQuery={handleSelectHistoryQuery}

@@ -11,6 +11,7 @@ import { useThemeCustomizationSync } from "@/features/settings";
 import { useTouchBarSync } from "@/features/touchbar";
 import { useOverlaySync } from "@/features/overlay";
 import { useDiscordSync } from "@/features/discord";
+import { useMobileMediaSession } from "@/features/player/hooks/useMobileMediaSession";
 import { AppRoutes } from "./routes";
 import PlaylistPresenceSync from "@/features/friends/ui/PlaylistPresenceSync";
 import DeeplinkHandler from "./DeeplinkHandler";
@@ -50,6 +51,7 @@ function DiscordSync() {
 
 export default function App() {
   useWindowDrag();
+  useMobileMediaSession();
 
   return (
     <HashRouter>

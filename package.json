@@ -13,6 +13,11 @@
     "bundle:publish": "pnpm --dir ../updater bundle:publish",
     "signer:build": "node ../signer/scripts/build-wasm.mjs",
     "preview": "vite preview",
+    "mobile:sync": "pnpm build && cap sync",
+    "mobile:android": "pnpm build && cap run android",
+    "mobile:android:open": "cap open android",
+    "mobile:ios": "pnpm build && cap run ios",
+    "mobile:ios:open": "cap open ios",
     "social:dev": "pnpm dlx wrangler dev --config cloudflare/social-worker/wrangler.jsonc",
     "social:d1:create": "pnpm dlx wrangler d1 create zucify-social --config cloudflare/social-worker/wrangler.jsonc",
     "social:d1:migrate": "pnpm dlx wrangler d1 migrations apply zucify-social --config cloudflare/social-worker/wrangler.jsonc --remote",
@@ -111,6 +116,10 @@
   "dependencies": {
     "@braccato/core": "^1.4.0",
     "@braccato/parsers": "^0.2.1",
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/ios": "^8.5.3",
+    "@capgo/capacitor-media-session": "^8.1.5",
     "@mingcute/react": "^1.4.1",
     "@solar-icons/react": "^1.1.1",
     "@tanstack/react-virtual": "^3.13.23",
@@ -134,6 +143,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^20",
     "@types/react": "^19",

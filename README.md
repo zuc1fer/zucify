@@ -2,7 +2,7 @@
 
 # Zucify
 
-**Modern desktop music streaming player with syllable-synced lyrics and reactive dynamic visuals.**
+**Music streaming client for desktop and mobile, with syllable-synced lyrics and reactive dynamic visuals.**
 
 [![Electron](https://img.shields.io/badge/Electron-44.0-47848F?style=flat-square&logo=electron&logoColor=black&labelColor=white)](https://electronjs.org)
 [![React 19](https://img.shields.io/badge/React_19-19.2-61DAFB?style=flat-square&logo=react&logoColor=black&labelColor=white)](https://react.dev)
@@ -14,6 +14,7 @@
 [Architecture](#architecture) •
 [Getting Started](#getting-started) •
 [Building](#building) •
+[Mobile Development](#mobile-development) •
 [Contributing](#contributing) •
 [License](#license)
 
@@ -133,6 +134,21 @@ bun run electron:build:win
 ```
 
 Compiled distributions will be placed in the `release/` directory.
+
+## Mobile Development
+
+The React renderer is packaged for Android and iOS with Capacitor. After installing dependencies, build and sync the web app with `pnpm mobile:sync`.
+
+- **Android:** Install Android Studio and an Android SDK, then use `pnpm mobile:android` to build and launch on a connected device or emulator. Use `pnpm mobile:android:open` to open the native project in Android Studio.
+- **iOS:** On macOS with Xcode installed, use `pnpm mobile:ios` to build and launch, or `pnpm mobile:ios:open` to open the native project in Xcode.
+
+Mobile playback controls use the device media session. Native builds must be synced after changing dependencies with `pnpm mobile:sync`.
+
+Mobile launcher and splash artwork comes from `assets/logo.svg`. Regenerate platform assets with:
+
+```bash
+npm exec --yes --package=@capacitor/assets@3.0.5 -- capacitor-assets generate --android --ios --iconBackgroundColor "#10121A" --splashBackgroundColor "#080808"
+```
 
 ---
 

@@ -103,7 +103,7 @@ export function PlayerUiElements({
     <>
       {/* Artwork (Compact, flat, no drop shadows) */}
       <div
-        className={`relative shrink-0 overflow-hidden rounded-xl w-[280px] h-[280px] bg-black/20 ${
+        className={`relative shrink-0 overflow-hidden rounded-xl w-[280px] h-[280px] max-md:w-[min(280px,64vw,32dvh)] max-md:h-[min(280px,64vw,32dvh)] bg-black/20 ${
           coverUrl && !isCoverLoaded ? "animate-pulse" : ""
         }`}
       >
@@ -169,7 +169,7 @@ export function PlayerUiElements({
       </div>
 
       {/* Track info */}
-      <div className="w-[280px] flex items-start justify-center min-w-0">
+      <div className="w-[280px] max-md:w-[min(280px,84vw)] flex items-start justify-center min-w-0">
         <div className="flex flex-col gap-[2px] min-w-0 text-center">
           <p
             className="m-0 text-[15px] font-[600] text-white flex items-center justify-center gap-[6px] max-w-[280px]"
@@ -204,7 +204,7 @@ export function PlayerUiElements({
         disabled={playbackControlLocked}
         showTime
         size="md"
-        className="w-[320px]"
+        className="w-[320px] max-md:w-[88vw]"
         fillColor={BRANDING_ACCENTS[player.accentVariant]}
       />
 
