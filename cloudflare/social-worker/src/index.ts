@@ -260,20 +260,37 @@ async function playlists(env: Env, userId: string, sourcePlaylistId?: string, pl
 async function listeningSessions(env: Env, userId: string): Promise<Response> {
   const result = await env.DB.prepare(
     `SELECT s.id, s.host_id AS hostId, s.guest_id AS guestId, s.track_json AS trackJson,
-       s.position_ms AS positionMs, s.playback_status AS playbackStatus, s.status,
+       s.shared_playlist_id AS sharedPlaylistId, s.party_type AS partyType, p.title AS playlistTitle,
+       (SELECT COUNT(*) FROM listening_session_members all_members
+         WHERE all_members.session_id = s.id AND all_members.status != 'left') AS memberCount,
+       mine.status AS myStatus, s.position_ms AS positionMs, s.playback_status AS playbackStatus, s.status,
        s.created_at AS createdAt, s.updated_at AS updatedAt,
        host.username AS hostUsername, host.display_name AS hostDisplayName, host.avatar_url AS hostAvatarUrl,
        guest.username AS guestUsername, guest.display_name AS guestDisplayName, guest.avatar_url AS guestAvatarUrl
      FROM listening_sessions s
+     LEFT JOIN listening_session_members mine ON mine.session_id = s.id AND mine.user_id = ?
+     LEFT JOIN shared_playlists p ON p.id = s.shared_playlist_id
      LEFT JOIN social_users host ON host.id = s.host_id
      LEFT JOIN social_users guest ON guest.id = s.guest_id
-     WHERE (s.host_id = ? OR s.guest_id = ?) AND s.status != 'ended' AND s.updated_at > ?
+     WHERE ((mine.user_id = ? AND mine.status IN ('invited', 'active')) OR
+       (s.party_type = 'friends' AND s.host_id != ? AND EXISTS (
+         SELECT 1 FROM friendships f WHERE
+           (f.user_low_id = s.host_id AND f.user_high_id = ?) OR
+           (f.user_high_id = s.host_id AND f.user_low_id = ?)
+       )) OR
+       (s.party_type = 'playlist' AND EXISTS (
+         SELECT 1 FROM shared_playlist_members pm
+         WHERE pm.playlist_id = s.shared_playlist_id AND pm.user_id = ?
+       )))
+       AND s.status != 'ended' AND s.updated_at > ?
      ORDER BY s.updated_at DESC LIMIT 30`,
-  ).bind(userId, userId, Date.now() - 12 * 60 * 60 * 1000).all();
+  ).bind(userId, userId, userId, userId, userId, userId, Date.now() - 12 * 60 * 60 * 1000).all();
   return json({ items: (result.results ?? []).map((row: any) => ({
     id: row.id, hostId: row.hostId, guestId: row.guestId,
     host: { id: row.hostId, username: row.hostUsername, displayName: row.hostDisplayName, avatarUrl: row.hostAvatarUrl },
     guest: { id: row.guestId, username: row.guestUsername, displayName: row.guestDisplayName, avatarUrl: row.guestAvatarUrl },
+    sharedPlaylistId: row.sharedPlaylistId, partyType: row.partyType ?? "song", playlistTitle: row.playlistTitle,
+    memberCount: Number(row.memberCount) || 2, myStatus: row.myStatus,
     track: safeParse(row.trackJson), positionMs: row.positionMs, playbackStatus: row.playbackStatus,
     status: row.status, createdAt: row.createdAt, updatedAt: row.updatedAt,
   })) });
@@ -362,6 +379,46 @@ async function linkExistingPlaylist(env: Env, user: SocialUser, body: any): Prom
   return json({ id: playlistId, ownerId: user.id, sourcePlaylistId, title }, existing ? 200 : 201);
 }
 
+async function createPlaylistParty(env: Env, user: SocialUser, playlistId: string): Promise<Response> {
+  const denied = await requirePlaylistMember(env, playlistId, user.id);
+  if (denied) return denied;
+  const playlist = await env.DB.prepare("SELECT title FROM shared_playlists WHERE id = ?").bind(playlistId).first() as any;
+  const members = await env.DB.prepare(
+    "SELECT user_id AS userId FROM shared_playlist_members WHERE playlist_id = ? ORDER BY added_at",
+  ).bind(playlistId).all();
+  const inviteeIds = (members.results ?? []).map((row: any) => row.userId as string).filter((id) => id !== user.id);
+  if (!inviteeIds.length) return error("Invite a friend to this shared playlist before starting a party.");
+  if (inviteeIds.length > 49) return error("A playlist party can have up to 50 members.", 413);
+
+  const firstTrackRow = await env.DB.prepare(
+    "SELECT track_json AS trackJson FROM shared_playlist_tracks WHERE playlist_id = ? ORDER BY position, created_at LIMIT 1",
+  ).bind(playlistId).first() as any;
+  const track = firstTrackRow ? parseTrack(safeParse(firstTrackRow.trackJson)) : null;
+  if (!track) return error("Add a song to this shared playlist before starting a party.");
+
+  const id = crypto.randomUUID();
+  const now = Date.now();
+  const guestId = inviteeIds[0];
+  await env.DB.prepare(
+    `INSERT INTO listening_sessions
+     (id, host_id, guest_id, track_json, position_ms, playback_status, status, created_at, updated_at, shared_playlist_id, party_type)
+     VALUES (?, ?, ?, ?, 0, 'playing', 'waiting', ?, ?, ?, 'playlist')`,
+  ).bind(id, user.id, guestId, JSON.stringify(track), now, now, playlistId).run();
+  const memberRows = [
+    env.DB.prepare("INSERT INTO listening_session_members (session_id, user_id, status, created_at) VALUES (?, ?, 'active', ?)").bind(id, user.id, now),
+    ...inviteeIds.map((memberId) => env.DB.prepare(
+      "INSERT INTO listening_session_members (session_id, user_id, status, created_at) VALUES (?, ?, 'invited', ?)",
+    ).bind(id, memberId, now)),
+  ];
+  await env.DB.batch(memberRows);
+  return json({
+    id, hostId: user.id, guestId, track, sharedPlaylistId: playlistId,
+    partyType: "playlist", playlistTitle: playlist?.title ?? "Shared playlist",
+    memberCount: inviteeIds.length + 1, myStatus: "active", positionMs: 0,
+    playbackStatus: "playing", status: "waiting", createdAt: now, updatedAt: now,
+  }, 201);
+}
+
 async function handleApi(request: Request, env: Env, user: SocialUser): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, "") || "/";
@@ -381,6 +438,10 @@ async function handleApi(request: Request, env: Env, user: SocialUser): Promise<
   if (method === "GET" && path === "/api/people") return searchPeople(env, user.id, url.searchParams.get("q"));
   if (method === "GET" && path === "/api/requests") return requests(env, user.id);
   if (method === "GET" && path === "/api/playlists") return playlists(env, user.id);
+  const playlistPartyPath = path.match(/^\/api\/playlists\/([^/]+)\/sessions$/);
+  if (method === "POST" && playlistPartyPath) {
+    return createPlaylistParty(env, user, decodeURIComponent(playlistPartyPath[1]));
+  }
   const linkedPlaylistPath = path.match(/^\/api\/playlists\/source\/([^/]+)$/);
   if (method === "GET" && linkedPlaylistPath) {
     const sourcePlaylistId = decodeURIComponent(linkedPlaylistPath[1]);
@@ -638,6 +699,29 @@ async function handleApi(request: Request, env: Env, user: SocialUser): Promise<
     return json({ ok: true });
   }
 
+  if (method === "POST" && path === "/api/sessions/hosted") {
+    const body = await request.json().catch(() => null) as any;
+    const track = parseTrack(body?.track);
+    if (!track) return error("Play a song before starting a listening party.");
+    const id = crypto.randomUUID();
+    const now = Date.now();
+    const positionMs = Number.isFinite(body?.positionMs) ? Math.max(0, Math.min(Number(body.positionMs), 24 * 60 * 60 * 1000)) : 0;
+    const playbackStatus = body?.playbackStatus === "paused" ? "paused" : "playing";
+    await env.DB.prepare(
+      `INSERT INTO listening_sessions
+       (id, host_id, guest_id, track_json, position_ms, playback_status, status, created_at, updated_at, party_type)
+       VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, 'friends')`,
+    ).bind(id, user.id, user.id, JSON.stringify(track), positionMs, playbackStatus, now, now).run();
+    await env.DB.prepare(
+      "INSERT INTO listening_session_members (session_id, user_id, status, created_at) VALUES (?, ?, 'active', ?)",
+    ).bind(id, user.id, now).run();
+    return json({
+      id, hostId: user.id, guestId: user.id, track, positionMs, playbackStatus,
+      partyType: "friends", memberCount: 1, myStatus: "active", status: "active",
+      createdAt: now, updatedAt: now,
+    }, 201);
+  }
+
   if (method === "POST" && path === "/api/sessions") {
     const body = await request.json().catch(() => null) as any;
     const guestId = string(body?.guestId, 300);
@@ -653,23 +737,67 @@ async function handleApi(request: Request, env: Env, user: SocialUser): Promise<
       `INSERT INTO listening_sessions (id, host_id, guest_id, track_json, position_ms, playback_status, status, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, 'waiting', ?, ?)`,
     ).bind(id, user.id, guestId, JSON.stringify(track), positionMs, playbackStatus, now, now).run();
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO listening_session_members (session_id, user_id, status, created_at) VALUES (?, ?, 'active', ?)").bind(id, user.id, now),
+      env.DB.prepare("INSERT INTO listening_session_members (session_id, user_id, status, created_at) VALUES (?, ?, 'invited', ?)").bind(id, guestId, now),
+    ]);
     return json({ id, hostId: user.id, guestId, track, positionMs, playbackStatus, status: "waiting", createdAt: now }, 201);
   }
 
   const joinPath = path.match(/^\/api\/sessions\/([^/]+)\/join$/);
   if (method === "POST" && joinPath) {
     const sessionId = decodeURIComponent(joinPath[1]);
-    const session = await env.DB.prepare("SELECT * FROM listening_sessions WHERE id=? AND status!='ended'").bind(sessionId).first();
-    if (!session || (session.host_id !== user.id && session.guest_id !== user.id)) return error("That listening invitation is no longer available.", 404);
+    const session = await env.DB.prepare(
+      "SELECT *, shared_playlist_id AS sharedPlaylistId, party_type AS partyType FROM listening_sessions WHERE id=? AND status!='ended'",
+    ).bind(sessionId).first() as any;
+    if (!session) return error("That listening party is no longer available.", 404);
+    let member = await env.DB.prepare(
+      "SELECT status FROM listening_session_members WHERE session_id=? AND user_id=?",
+    ).bind(sessionId, user.id).first() as any;
+    if (session.partyType === "playlist" && (!member || member.status === "left")) {
+      const denied = await requirePlaylistMember(env, session.sharedPlaylistId, user.id);
+      if (denied) return denied;
+      await env.DB.prepare(
+        `INSERT INTO listening_session_members (session_id, user_id, status, created_at) VALUES (?, ?, 'active', ?)
+         ON CONFLICT(session_id, user_id) DO UPDATE SET status='active'`,
+      ).bind(sessionId, user.id, Date.now()).run();
+      member = { status: "active" };
+    } else if (session.partyType === "friends" && (!member || member.status === "left") && await areFriends(env, session.host_id, user.id)) {
+      await env.DB.prepare(
+        `INSERT INTO listening_session_members (session_id, user_id, status, created_at) VALUES (?, ?, 'active', ?)
+         ON CONFLICT(session_id, user_id) DO UPDATE SET status='active'`,
+      ).bind(sessionId, user.id, Date.now()).run();
+      member = { status: "active" };
+    }
+    if (!member || member.status === "left") return error("That listening party is not available to you.", 404);
+    if (member.status === "invited") {
+      await env.DB.prepare("UPDATE listening_session_members SET status='active' WHERE session_id=? AND user_id=?")
+        .bind(sessionId, user.id).run();
+    }
     await env.DB.prepare("UPDATE listening_sessions SET status='active', updated_at=? WHERE id=? AND status='waiting'").bind(Date.now(), sessionId).run();
-    return json({ id: sessionId, hostId: session.host_id, guestId: session.guest_id, track: safeParse(session.track_json), positionMs: session.position_ms, playbackStatus: session.playback_status, status: "active" });
+    const memberCount = await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM listening_session_members WHERE session_id=? AND status!='left'",
+    ).bind(sessionId).first() as any;
+    return json({
+      id: sessionId, hostId: session.host_id, guestId: session.guest_id,
+      sharedPlaylistId: session.sharedPlaylistId, partyType: session.partyType ?? "song",
+      playlistTitle: session.sharedPlaylistId
+        ? (await env.DB.prepare("SELECT title FROM shared_playlists WHERE id=?").bind(session.sharedPlaylistId).first() as any)?.title ?? null
+        : null,
+      memberCount: Number(memberCount?.count) || 1, myStatus: "active",
+      track: safeParse(session.track_json), positionMs: session.position_ms,
+      playbackStatus: session.playback_status, status: "active",
+    });
   }
 
   const ticketPath = path.match(/^\/api\/sessions\/([^/]+)\/ticket$/);
   if (method === "POST" && ticketPath) {
     const sessionId = decodeURIComponent(ticketPath[1]);
-    const session = await env.DB.prepare("SELECT host_id, guest_id, status FROM listening_sessions WHERE id=?").bind(sessionId).first();
-    if (!session || session.status === "ended" || (session.host_id !== user.id && session.guest_id !== user.id)) return error("That listening room has ended.", 404);
+    const session = await env.DB.prepare("SELECT host_id AS hostId, party_type AS partyType, status FROM listening_sessions WHERE id=?").bind(sessionId).first() as any;
+    const member = await env.DB.prepare(
+      "SELECT 1 AS ok FROM listening_session_members WHERE session_id=? AND user_id=? AND status='active'",
+    ).bind(sessionId, user.id).first();
+    if (!session || session.status === "ended" || !member) return error("That listening room has ended.", 404);
     const ticket = crypto.randomUUID() + crypto.randomUUID();
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ticket));
     const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -681,12 +809,21 @@ async function handleApi(request: Request, env: Env, user: SocialUser): Promise<
   const leavePath = path.match(/^\/api\/sessions\/([^/]+)\/leave$/);
   if (method === "POST" && leavePath) {
     const sessionId = decodeURIComponent(leavePath[1]);
-    const session = await env.DB.prepare("SELECT host_id, guest_id, status FROM listening_sessions WHERE id=?").bind(sessionId).first();
-    if (!session || (session.host_id !== user.id && session.guest_id !== user.id)) return error("Listening room not found.", 404);
-    if (session.status !== "ended") {
+    const session = await env.DB.prepare("SELECT host_id AS hostId, party_type AS partyType, status FROM listening_sessions WHERE id=?").bind(sessionId).first() as any;
+    const member = await env.DB.prepare(
+      "SELECT 1 AS ok FROM listening_session_members WHERE session_id=? AND user_id=?",
+    ).bind(sessionId, user.id).first();
+    if (!session || !member) return error("Listening room not found.", 404);
+    if (session.status !== "ended" && (session.partyType === "song" || (session.partyType === "friends" && session.hostId === user.id))) {
       await env.DB.prepare("UPDATE listening_sessions SET status='ended', updated_at=? WHERE id=?").bind(Date.now(), sessionId).run();
       const roomId = env.LISTENING_ROOMS.idFromName(sessionId);
       await env.LISTENING_ROOMS.get(roomId).fetch("https://room/close");
+    } else if (session.status !== "ended") {
+      await env.DB.prepare("UPDATE listening_session_members SET status='left' WHERE session_id=? AND user_id=?")
+        .bind(sessionId, user.id).run();
+      const roomId = env.LISTENING_ROOMS.idFromName(sessionId);
+      const leaveRequest = new Request("https://room/leave", { headers: { "x-social-user": user.id, "x-session-id": sessionId } });
+      await env.LISTENING_ROOMS.get(roomId).fetch(leaveRequest);
     }
     return json({ ok: true });
   }
@@ -737,8 +874,24 @@ export class ListeningRoom {
   }
 
   async fetch(request: Request): Promise<Response> {
-    if (new URL(request.url).pathname === "/close") {
+    const path = new URL(request.url).pathname;
+    if (path === "/close") {
       await this.finish();
+      return json({ ok: true });
+    }
+    if (path === "/leave") {
+      const userId = request.headers.get("x-social-user");
+      const sessionId = request.headers.get("x-session-id");
+      if (!userId || !sessionId) return error("Room identity is missing.", 401);
+      for (const socket of this.state.getWebSockets()) {
+        const attachment = socket.deserializeAttachment() as { userId?: string } | null;
+        if (attachment?.userId === userId) {
+          try { socket.close(1000, "Listener left the party"); } catch {}
+        }
+      }
+      await this.state.storage.deleteAlarm();
+      await this.state.storage.delete("disconnectDeadline");
+      await this.broadcastPresence(sessionId);
       return json({ ok: true });
     }
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") return error("WebSocket upgrade required.", 426);
@@ -747,14 +900,19 @@ export class ListeningRoom {
     if (!userId || !sessionId) return error("Room identity is missing.", 401);
     if (await this.state.storage.get("ended")) return error("This listening room has ended.", 404);
 
-    const record = await this.env.DB.prepare("SELECT host_id, guest_id, track_json, position_ms, playback_status, status FROM listening_sessions WHERE id=?")
+    const record = await this.env.DB.prepare("SELECT host_id, track_json, position_ms, playback_status, status, shared_playlist_id, party_type FROM listening_sessions WHERE id=?")
       .bind(sessionId).first();
-    if (!record || record.status === "ended" || (record.host_id !== userId && record.guest_id !== userId)) return error("This listening room has ended.", 404);
+    const member = await this.env.DB.prepare(
+      "SELECT 1 AS ok FROM listening_session_members WHERE session_id=? AND user_id=? AND status='active'",
+    ).bind(sessionId, userId).first();
+    if (!record || record.status === "ended" || !member) return error("This listening room has ended.", 404);
     const snapshot = {
       hostId: record.host_id,
       track: safeParse(record.track_json),
       positionMs: Number(record.position_ms) || 0,
       status: record.playback_status === "paused" ? "paused" : "playing",
+      sharedPlaylistId: record.shared_playlist_id ?? null,
+      partyType: record.party_type ?? "song",
       updatedAt: Date.now(),
     };
     await this.state.storage.put("snapshot", snapshot);
@@ -779,15 +937,58 @@ export class ListeningRoom {
       await this.state.storage.setAlarm(deadline);
       return;
     }
-    const session = await this.env.DB.prepare("SELECT host_id, guest_id, status FROM listening_sessions WHERE id=?")
-      .bind(sessionId).first();
+    const session = await this.env.DB.prepare("SELECT host_id AS hostId, party_type AS partyType, status FROM listening_sessions WHERE id=?")
+      .bind(sessionId).first() as any;
     if (!session || session.status === "ended") {
       await this.finish(sessionId);
       return;
     }
+    const activeMembers = await this.env.DB.prepare(
+      "SELECT user_id AS userId FROM listening_session_members WHERE session_id=? AND status='active'",
+    ).bind(sessionId).all();
     const connected = this.connectedUserIds();
-    if (connected.has(session.host_id) && connected.has(session.guest_id)) {
+    if (!(activeMembers.results ?? []).length && session.partyType === "playlist") {
+      const invited = await this.env.DB.prepare(
+        "SELECT COUNT(*) AS count FROM listening_session_members WHERE session_id=? AND status='invited'",
+      ).bind(sessionId).first() as any;
+      if (!Number(invited?.count)) {
+        await this.finish(sessionId);
+      } else {
+        await this.state.storage.deleteAlarm();
+        await this.state.storage.delete("disconnectDeadline");
+      }
+      return;
+    }
+    if ((activeMembers.results ?? []).every((row: any) => connected.has(row.userId))) {
       await this.state.storage.delete("disconnectDeadline");
+      return;
+    }
+    if (session.partyType === "playlist") {
+      const missing = (activeMembers.results ?? []).filter((row: any) => !connected.has(row.userId));
+      for (const row of missing) {
+        await this.env.DB.prepare("UPDATE listening_session_members SET status='left' WHERE session_id=? AND user_id=? AND status='active'")
+          .bind(sessionId, row.userId).run();
+      }
+      const remaining = await this.env.DB.prepare(
+        "SELECT COUNT(*) AS count FROM listening_session_members WHERE session_id=? AND status IN ('active', 'invited')",
+      ).bind(sessionId).first() as any;
+      if (!Number(remaining?.count)) {
+        await this.finish(sessionId);
+        return;
+      }
+      await this.state.storage.delete("disconnectDeadline");
+      await this.broadcastPresence(sessionId);
+      return;
+    }
+    if (session.partyType === "friends" && connected.has(session.hostId)) {
+      for (const row of activeMembers.results ?? []) {
+        if (row.userId !== session.hostId && !connected.has(row.userId)) {
+          await this.env.DB.prepare("UPDATE listening_session_members SET status='left' WHERE session_id=? AND user_id=? AND status='active'")
+            .bind(sessionId, row.userId).run();
+        }
+      }
+      await this.state.storage.delete("disconnectDeadline");
+      await this.broadcastPresence(sessionId);
       return;
     }
     await this.finish(sessionId);
@@ -804,9 +1005,12 @@ export class ListeningRoom {
       return;
     }
     if (event?.type === "control") {
-      const session = await this.env.DB.prepare("SELECT host_id, status FROM listening_sessions WHERE id=?")
+      const session = await this.env.DB.prepare("SELECT host_id, party_type AS partyType, status FROM listening_sessions WHERE id=?")
         .bind(attachment.sessionId).first();
-      if (!session || session.status === "ended" || attachment.userId === session.host_id) return;
+      const member = await this.env.DB.prepare(
+        "SELECT 1 AS ok FROM listening_session_members WHERE session_id=? AND user_id=? AND status='active'",
+      ).bind(attachment.sessionId, attachment.userId).first();
+      if (!session || session.status === "ended" || !member || session.partyType === "friends" || attachment.userId === session.host_id) return;
       const action = event.action;
       if (!action || !["play", "pause", "resume", "seek"].includes(action.type)) return;
       const control = action.type === "play"
@@ -824,14 +1028,21 @@ export class ListeningRoom {
       return;
     }
     if (event?.type !== "sync") return;
-    const session = await this.env.DB.prepare("SELECT host_id, status FROM listening_sessions WHERE id=?")
+    const session = await this.env.DB.prepare("SELECT host_id, party_type AS partyType, shared_playlist_id AS sharedPlaylistId, status FROM listening_sessions WHERE id=?")
       .bind(attachment.sessionId).first();
-    if (!session || session.status === "ended" || attachment.userId !== session.host_id) return;
+    const member = await this.env.DB.prepare(
+      "SELECT 1 AS ok FROM listening_session_members WHERE session_id=? AND user_id=? AND status='active'",
+    ).bind(attachment.sessionId, attachment.userId).first();
+    if (!session || session.status === "ended" || !member || (session.partyType !== "playlist" && attachment.userId !== session.host_id)) return;
     const track = parseTrack(event.track);
     const positionMs = Number.isFinite(event.positionMs) ? Math.max(0, Math.min(Number(event.positionMs), 24 * 60 * 60 * 1000)) : 0;
     const status = event.status === "paused" ? "paused" : "playing";
     if (!track) return;
-    const snapshot = { hostId: session.host_id, track, positionMs, status, updatedAt: Date.now() };
+    const snapshot = {
+      hostId: session.host_id, track, positionMs, status,
+      sharedPlaylistId: session.sharedPlaylistId ?? null,
+      partyType: session.partyType ?? "song", updatedAt: Date.now(),
+    };
     await this.state.storage.put("snapshot", snapshot);
     await this.env.DB.prepare(
       "UPDATE listening_sessions SET track_json=?, position_ms=?, playback_status=?, updated_at=? WHERE id=? AND status!='ended'",
@@ -867,13 +1078,14 @@ export class ListeningRoom {
   }
 
   private async broadcastPresence(sessionId: string): Promise<void> {
-    const session = await this.env.DB.prepare("SELECT host_id, guest_id FROM listening_sessions WHERE id=?")
-      .bind(sessionId).first();
-    if (!session) return;
+    const members = await this.env.DB.prepare(
+      "SELECT user_id AS userId FROM listening_session_members WHERE session_id=? AND status='active'",
+    ).bind(sessionId).all();
     const connected = this.connectedUserIds();
-    const connectedCount = Number(connected.has(session.host_id)) + Number(connected.has(session.guest_id));
+    const connectedCount = (members.results ?? []).filter((row: any) => connected.has(row.userId)).length;
+    const memberCount = (members.results ?? []).length;
     await this.state.storage.put("sessionId", sessionId);
-    this.broadcast({ type: "presence", connectedCount });
+    this.broadcast({ type: "presence", connectedCount, memberCount });
   }
 
   private async scheduleDisconnect(sessionId: string): Promise<void> {

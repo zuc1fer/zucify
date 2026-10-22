@@ -36,6 +36,7 @@ import { useTranslation } from "@/languages";
 import { api } from "@/shared/api";
 import { useIsContentTransparent } from "@/features/settings/store/customizationStore";
 import { useAuthStore } from "@/features/auth";
+import { connectListeningRoom, getListeningRoom, leaveListeningRoom, subscribeListeningRoom, type ListeningRoomSnapshot } from "@/features/friends/listeningRoom";
 import TrackReactions from "@/features/friends/ui/TrackReactions";
 import {
   isSocialApiConfigured,
@@ -188,12 +189,18 @@ function LibraryPlaylistContent() {
   const currentTrack = usePlayerStore((state) => state.currentTrack);
   const socialConfigured = isSocialApiConfigured();
   const [linkedPlaylist, setLinkedPlaylist] = useState<SharedPlaylist | null>(null);
+  const [listeningRoom, setListeningRoom] = useState<ListeningRoomSnapshot | null>(() => getListeningRoom());
   const [linkStatus, setLinkStatus] = useState<"loading" | "unlinked" | "linked" | "error" | "unconfigured">("loading");
   const [socialFriends, setSocialFriends] = useState<SocialPerson[]>([]);
   const [selectedFriendId, setSelectedFriendId] = useState("");
   const [socialBusy, setSocialBusy] = useState(false);
   const [socialError, setSocialError] = useState("");
   const lastSyncedSourceRef = useRef("");
+
+  useEffect(() => {
+    const unsubscribe = subscribeListeningRoom((snapshot) => setListeningRoom(snapshot));
+    return () => { unsubscribe(); };
+  }, []);
 
   const isLoading = isLikesMode ? likesLoading : isSharedMode ? linkStatus === "loading" : playlistLoading;
 
@@ -484,6 +491,43 @@ function LibraryPlaylistContent() {
       setSocialBusy(false);
     }
   }, [currentTrack, linkedPlaylist, socialBusy, toast]);
+
+  const playlistPartyActive = Boolean(
+    linkedPlaylist && !listeningRoom?.ended && listeningRoom?.partyType === "playlist" && listeningRoom.sharedPlaylistId === linkedPlaylist.id,
+  );
+
+  const handleStartPlaylistParty = useCallback(async () => {
+    if (!linkedPlaylist || !currentUser || socialBusy) return;
+    const existingRoom = getListeningRoom();
+    if (existingRoom) {
+      setSocialError("Leave your current listening room before starting another one.");
+      return;
+    }
+    setSocialBusy(true);
+    setSocialError("");
+    try {
+      const session = await socialApi.createPlaylistSession(linkedPlaylist.id);
+      await connectListeningRoom(session, currentUser.id);
+      toast("Playlist party started. Members can join from Friends → Listening together.", "checkmark", { description: linkedPlaylist.title });
+    } catch (error) {
+      setSocialError(error instanceof Error ? error.message : "Could not start a playlist party.");
+    } finally {
+      setSocialBusy(false);
+    }
+  }, [currentUser, linkedPlaylist, socialBusy, toast]);
+
+  const handleLeavePlaylistParty = useCallback(async () => {
+    if (!playlistPartyActive || !listeningRoom?.sessionId || socialBusy) return;
+    setSocialBusy(true);
+    setSocialError("");
+    try {
+      await leaveListeningRoom(listeningRoom.sessionId);
+    } catch (error) {
+      setSocialError(error instanceof Error ? error.message : "Could not end the playlist party.");
+    } finally {
+      setSocialBusy(false);
+    }
+  }, [listeningRoom?.sessionId, playlistPartyActive, socialBusy]);
 
   const handleTrackReaction = useCallback(async (
     item: SharedPlaylistTrack,
@@ -1123,6 +1167,19 @@ function LibraryPlaylistContent() {
                               ) : !isSharedMode && linkedPlaylist.ownerId === currentUser?.id ? (
                                 <p className="m-0 text-[11px] text-text-tertiary">Add friends in Friends to invite them here.</p>
                               ) : null}
+                              {playlistPartyActive ? (
+                                <>
+                                  <p className="m-0 text-[11px] text-emerald-500">Playlist party · {listeningRoom?.status || "Connected"}</p>
+                                  <Button variant="secondary" onClick={() => void handleLeavePlaylistParty()} disabled={socialBusy} className="!h-[32px] w-full !text-[11px]">
+                                    Leave playlist party
+                                  </Button>
+                                </>
+                              ) : (
+                                <Button variant="outline" onClick={() => void handleStartPlaylistParty()} disabled={socialBusy || Boolean(listeningRoom && !listeningRoom.ended) || linkedPlaylist.members.length < 2 || linkedPlaylist.trackCount === 0} className="!h-[32px] w-full !text-[11px]">
+                                  {socialBusy ? "Starting party…" : "Start playlist party"}
+                                </Button>
+                              )}
+                              <p className="m-0 text-[10px] leading-[1.4] text-text-tertiary">Invitees can join from Friends → Listening together. Everyone in a playlist party can control playback.</p>
                               {currentTrack && (
                                 <Button variant="outline" onClick={() => void handleAddCurrentTrack()} disabled={socialBusy} className="!h-[32px] w-full !text-[11px]">
                                   Add current song

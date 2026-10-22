@@ -8,6 +8,8 @@ export interface ListeningRoomSnapshot {
   sessionId: string;
   hostId: string;
   userId: string;
+  sharedPlaylistId?: string | null;
+  partyType?: "song" | "playlist" | "friends";
   status: string;
   connected: boolean;
   ended?: boolean;
@@ -19,6 +21,14 @@ interface RoomRuntime {
   sessionId: string;
   hostId: string;
   userId: string;
+  sharedPlaylistId: string | null;
+  partyType: "song" | "playlist" | "friends";
+  playlistTracks: import("@/shared/types").Track[];
+  playlistTitle: string;
+  playlistCoverUrl: string;
+  previousShuffle: boolean | null;
+  lastHostState: RoomState | null;
+  initialStateApplied: boolean;
   status: string;
   socket: WebSocket | null;
   connecting: boolean;
@@ -41,6 +51,8 @@ function publish(room: RoomRuntime, update: Partial<ListeningRoomSnapshot> = {})
     sessionId: room.sessionId,
     hostId: room.hostId,
     userId: room.userId,
+    sharedPlaylistId: room.sharedPlaylistId,
+    partyType: room.partyType,
     status: room.status,
     connected: room.socket?.readyState === WebSocket.OPEN || room.socket?.readyState === WebSocket.CONNECTING || room.connecting,
     ...update,
@@ -71,7 +83,14 @@ function finishRuntime(room: RoomRuntime, status: string): void {
   if (activeRoom !== room) return;
   publish(room, { status, ended: true, connected: false });
   closeRuntime(room);
+  if (room.previousShuffle !== null) playerEngine.setShuffle(room.previousShuffle);
   activeRoom = null;
+}
+
+function playbackQueue(room: RoomRuntime, track: import("@/shared/types").Track) {
+  return room.partyType === "playlist" && room.playlistTracks.some((item) => item.id === track.id)
+    ? room.playlistTracks
+    : [track];
 }
 
 function schedulePauseAfterLoad(room: RoomRuntime, trackId: string): void {
@@ -96,15 +115,27 @@ function schedulePauseAfterLoad(room: RoomRuntime, trackId: string): void {
 
 async function applyState(room: RoomRuntime, state: RoomState): Promise<void> {
   if (activeRoom !== room) return;
+  const before = usePlayerStore.getState();
+  if (room.partyType !== "playlist" && room.hostId === room.userId && before.currentTrack) {
+    room.initialStateApplied = true;
+    room.lastHostState = state;
+    room.lastLocal = currentPlayback();
+    return;
+  }
   room.remoteApplying = true;
   try {
-    const before = usePlayerStore.getState();
     const trackChanged = before.currentTrack?.id !== state.track.id;
-    if (trackChanged) {
+    if (trackChanged || !room.initialStateApplied) {
       room.unsubscribePendingPause?.();
       room.unsubscribePendingPause = null;
       room.pendingPauseTrackId = null;
-      await playerEngine.playTrack(state.track, [state.track]);
+      await playerEngine.playTrack(
+        state.track,
+        playbackQueue(room, state.track),
+        room.sharedPlaylistId ? `shared:${room.sharedPlaylistId}` : undefined,
+        room.playlistCoverUrl || undefined,
+      );
+      room.initialStateApplied = true;
     }
     const current = usePlayerStore.getState();
     if (Math.abs(current.positionMs - state.positionMs) > 1500) playerEngine.seek(state.positionMs);
@@ -121,6 +152,7 @@ async function applyState(room: RoomRuntime, state: RoomState): Promise<void> {
       playerEngine.resume();
     }
   } finally {
+    room.lastHostState = state;
     room.lastLocal = { trackId: state.track.id, status: state.status, positionMs: state.positionMs };
     window.setTimeout(() => { room.remoteApplying = false; }, 900);
   }
@@ -130,7 +162,12 @@ async function applyControl(room: RoomRuntime, action: any): Promise<void> {
   room.remoteApplying = true;
   try {
     if (action?.type === "play" && action.track) {
-      await playerEngine.playTrack(action.track, [action.track]);
+      await playerEngine.playTrack(
+        action.track,
+        playbackQueue(room, action.track),
+        room.sharedPlaylistId ? `shared:${room.sharedPlaylistId}` : undefined,
+        room.playlistCoverUrl || undefined,
+      );
     } else if (action?.type === "pause") {
       playerEngine.pause();
     } else if (action?.type === "resume") {
@@ -155,11 +192,17 @@ function observePlayback(room: RoomRuntime): void {
   const send = (message: unknown) => {
     if (room.socket?.readyState === WebSocket.OPEN) room.socket.send(JSON.stringify(message));
   };
-  if (room.hostId === room.userId) {
+  if (room.partyType === "playlist" || room.hostId === room.userId) {
     const changed = !previous || previous.trackId !== current.trackId || previous.status !== current.status;
     if (changed || now - room.lastHostSyncAt >= 2500) {
       send({ type: "sync", track, positionMs: local.positionMs, status: local.status === "playing" ? "playing" : "paused" });
       room.lastHostSyncAt = now;
+    }
+  } else if (room.partyType === "friends" && previous && previous.status !== "loading") {
+    const changed = previous.trackId !== current.trackId || previous.status !== current.status || Math.abs(previous.positionMs - current.positionMs) > 2500;
+    if (changed && room.lastHostState) {
+      const elapsed = room.lastHostState.status === "playing" ? Math.max(0, Date.now() - room.lastHostState.updatedAt) : 0;
+      void applyState(room, { ...room.lastHostState, positionMs: room.lastHostState.positionMs + elapsed });
     }
   } else if (previous && previous.status !== "loading") {
     if (previous.trackId !== current.trackId) send({ type: "control", action: { type: "play", track } });
@@ -172,11 +215,15 @@ function observePlayback(room: RoomRuntime): void {
 function onRoomMessage(room: RoomRuntime, message: RoomMessage): void {
   if (activeRoom !== room) return;
   if (message.type === "ended") {
-    finishRuntime(room, "Your friend left the listening session.");
+    finishRuntime(room, "The listening party has ended.");
   } else if (message.type === "presence") {
     publish(room, { status: message.connectedCount >= 2
       ? "Listening together"
-      : room.hostId === room.userId ? "Waiting for your friend to join…" : "Waiting for your friend to reconnect…" });
+      : room.partyType === "playlist"
+        ? "Waiting for playlist members to join…"
+        : room.partyType === "friends"
+          ? room.hostId === room.userId ? "Your room is live; waiting for friends…" : "Waiting for the host…"
+          : room.hostId === room.userId ? "Waiting for your friend to join…" : "Waiting for your friend to reconnect…" });
   } else if (message.type === "state") {
     void applyState(room, message).catch((err) => {
       publish(room, { error: err instanceof Error ? `Playback sync failed: ${err.message}` : "Playback sync failed." });
@@ -218,7 +265,7 @@ async function openRuntime(room: RoomRuntime): Promise<void> {
     }
     const onOpen = () => {
       if (activeRoom !== room) return;
-      publish(room, { status: room.hostId === room.userId ? "Waiting for your friend to join…" : "Connected" });
+      publish(room, { status: room.hostId === room.userId ? "Your room is live; waiting for friends…" : "Connected" });
       room.lastLocal = currentPlayback();
       observePlayback(room);
     };
@@ -243,6 +290,8 @@ export function getListeningRoom(): ListeningRoomSnapshot | null {
     sessionId: activeRoom.sessionId,
     hostId: activeRoom.hostId,
     userId: activeRoom.userId,
+    sharedPlaylistId: activeRoom.sharedPlaylistId,
+    partyType: activeRoom.partyType,
     status: activeRoom.status,
     connected: activeRoom.socket?.readyState === WebSocket.OPEN || activeRoom.socket?.readyState === WebSocket.CONNECTING || activeRoom.connecting,
   };
@@ -253,13 +302,18 @@ export function subscribeListeningRoom(listener: (snapshot: ListeningRoomSnapsho
   return () => listeners.delete(listener);
 }
 
-export async function connectListeningRoom(session: Pick<ListeningSession, "id" | "hostId">, userId: string): Promise<void> {
+export async function connectListeningRoom(
+  session: Pick<ListeningSession, "id" | "hostId"> & Partial<Pick<ListeningSession, "sharedPlaylistId" | "partyType">>,
+  userId: string,
+): Promise<void> {
   if (activeRoom && activeRoom.sessionId === session.id && activeRoom.userId === userId) {
     if (activeRoom.connecting || activeRoom.socket?.readyState === WebSocket.OPEN || activeRoom.socket?.readyState === WebSocket.CONNECTING) {
       publish(activeRoom);
       return;
     }
     activeRoom.hostId = session.hostId;
+    activeRoom.sharedPlaylistId = session.sharedPlaylistId ?? activeRoom.sharedPlaylistId;
+    activeRoom.partyType = session.partyType ?? activeRoom.partyType;
     await openRuntime(activeRoom);
     return;
   }
@@ -267,12 +321,21 @@ export async function connectListeningRoom(session: Pick<ListeningSession, "id" 
     const previous = activeRoom;
     try { await socialApi.leaveSession(previous.sessionId); } catch {}
     closeRuntime(previous);
+    if (previous.previousShuffle !== null) playerEngine.setShuffle(previous.previousShuffle);
     activeRoom = null;
   }
   const room: RoomRuntime = {
     sessionId: session.id,
     hostId: session.hostId,
     userId,
+    sharedPlaylistId: session.sharedPlaylistId ?? null,
+    partyType: session.partyType ?? "song",
+    playlistTracks: [],
+    playlistTitle: "",
+    playlistCoverUrl: "",
+    previousShuffle: null,
+    lastHostState: null,
+    initialStateApplied: false,
     status: "Connecting to the listening room…",
     socket: null,
     connecting: false,
@@ -285,6 +348,19 @@ export async function connectListeningRoom(session: Pick<ListeningSession, "id" 
     lastHostSyncAt: 0,
   };
   activeRoom = room;
+  if (room.partyType === "playlist" && room.sharedPlaylistId) {
+    try {
+      const playlist = await socialApi.getPlaylist(room.sharedPlaylistId);
+      room.playlistTracks = playlist.tracks.map((item) => item.track);
+      room.playlistTitle = playlist.title;
+      room.playlistCoverUrl = room.playlistTracks.find((track) => track.coverUrl)?.coverUrl ?? "";
+      room.previousShuffle = usePlayerStore.getState().shuffle;
+      playerEngine.setShuffle(false);
+    } catch (error) {
+      activeRoom = null;
+      throw error;
+    }
+  }
   await openRuntime(room);
 }
 
@@ -293,6 +369,7 @@ export function closeListeningRoomConnection(sessionId?: string): void {
   if (!room || (sessionId && room.sessionId !== sessionId)) return;
   publish(room, { status: "Connection closed. Reconnect within one minute.", connected: false, disconnected: true });
   closeRuntime(room);
+  if (room.previousShuffle !== null) playerEngine.setShuffle(room.previousShuffle);
   activeRoom = null;
 }
 

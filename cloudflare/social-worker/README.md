@@ -6,6 +6,8 @@ An existing Liner playlist can be made collaborative from its playlist page. The
 
 Invited members see the shared playlist in their Zucify Library and open a social-backed playlist view, even when the original Liner playlist is not in their account.
 
+Shared playlists can host playlist parties. Members accept the invite from Friends → Listening together; playback starts at the first song, and any connected member can change tracks or pause. Friends also has open listening parties that accepted friends can join; only the host controls playback in those rooms.
+
 ## Deploy to your Cloudflare account
 
 Wrangler must be logged in (`pnpm dlx wrangler login` if needed).
@@ -29,4 +31,4 @@ After creating the D1 database and setting its ID, run `pnpm social:dev`. Wrangl
 pnpm dlx wrangler d1 migrations apply zucify-social --config cloudflare/social-worker/wrangler.jsonc --local
 ```
 
-The Worker provides JSON endpoints under `/api/` and a Durable Object WebSocket for each listening session. Choosing **Leave session** ends the room for both people. The room connection stays active while you use other parts of Zucify; a network disconnect can reconnect for up to one minute before the room closes. Each device streams its own copy of the shared track, and the room syncs track, play/pause, and seek state.
+The Worker provides JSON endpoints under `/api/` and a Durable Object WebSocket for each listening room. Leaving a Friends party as host ends that room; playlist-party members can leave independently. The room connection stays active while you use other parts of Zucify; a network disconnect can reconnect for up to one minute. Each device streams its own copy of the audio, and the room syncs track, play/pause, and seek state.

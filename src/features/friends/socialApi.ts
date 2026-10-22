@@ -65,6 +65,11 @@ export interface ListeningSession {
   host: SocialPerson;
   guest: SocialPerson;
   track: Track;
+  sharedPlaylistId?: string | null;
+  partyType?: "song" | "playlist" | "friends";
+  playlistTitle?: string | null;
+  memberCount?: number;
+  myStatus?: "invited" | "active" | null;
   positionMs: number;
   playbackStatus: "playing" | "paused";
   status: "waiting" | "active";
@@ -78,13 +83,15 @@ export interface RoomState {
   track: Track;
   positionMs: number;
   status: "playing" | "paused";
+  sharedPlaylistId?: string | null;
+  partyType?: "song" | "playlist" | "friends";
   updatedAt: number;
 }
 
 export type RoomMessage =
   | RoomState
   | { type: "ended" }
-  | { type: "presence"; connectedCount: number }
+  | { type: "presence"; connectedCount: number; memberCount?: number }
   | { type: "control"; action: unknown };
 
 export interface SocialOverview {
@@ -161,6 +168,8 @@ export const socialApi = {
   removeTrack: (playlistId: string, itemId: string) => request<{ ok: boolean }>(`/api/playlists/${encodeURIComponent(playlistId)}/tracks/${encodeURIComponent(itemId)}`, { method: "DELETE" }),
   getSessions: () => request<{ items: ListeningSession[] }>("/api/sessions").then((result) => result.items),
   createSession: (guestId: string, track: Track, positionMs = 0, playbackStatus: "playing" | "paused" = "playing") => post<ListeningSession>("/api/sessions", { guestId, track, positionMs, playbackStatus }),
+  createHostedSession: (track: Track, positionMs = 0, playbackStatus: "playing" | "paused" = "playing") => post<ListeningSession>("/api/sessions/hosted", { track, positionMs, playbackStatus }),
+  createPlaylistSession: (playlistId: string) => post<ListeningSession>(`/api/playlists/${encodeURIComponent(playlistId)}/sessions`),
   joinSession: (sessionId: string) => post<ListeningSession>(`/api/sessions/${encodeURIComponent(sessionId)}/join`),
   leaveSession: (sessionId: string) => post<{ ok: boolean }>(`/api/sessions/${encodeURIComponent(sessionId)}/leave`),
   async connectRoom(sessionId: string, onMessage: (message: RoomMessage) => void, onClose?: () => void): Promise<WebSocket> {

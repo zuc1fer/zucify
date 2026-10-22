@@ -82,7 +82,6 @@ export default function FriendsPage() {
   const [notice, setNotice] = useState("");
   const [messageDraft, setMessageDraft] = useState("");
   const [playlistTitle, setPlaylistTitle] = useState("");
-  const [roomFriendId, setRoomFriendId] = useState("");
   const [activeSessionId, setActiveSessionId] = useState("");
   const [roomStatus, setRoomStatus] = useState("");
   const friendsConfigured = isSocialApiConfigured();
@@ -106,9 +105,6 @@ export default function FriendsPage() {
       setPlaylists(nextPlaylists);
       setSessions(nextSessions);
       setSelectedFriendId((current) => current && nextFriends.some((friend) => friend.id === current)
-        ? current
-        : nextFriends[0]?.id ?? "");
-      setRoomFriendId((current) => current && nextFriends.some((friend) => friend.id === current)
         ? current
         : nextFriends[0]?.id ?? "");
     } catch (err) {
@@ -334,18 +330,18 @@ export default function FriendsPage() {
     await runAction(() => socialApi.addPlaylistMember(playlist.id, selectedFriendId), `${personName(selectedFriend)} added to ${playlist.title}.`);
   };
 
-  const startListening = async () => {
-    if (!roomFriendId || !currentTrack) return;
+  const startListeningParty = async () => {
+    if (!currentTrack) return;
     setBusy(true);
     setError("");
     try {
-      const session = await socialApi.createSession(roomFriendId, currentTrack, playerPosition, playerStatus === "playing" ? "playing" : "paused");
+      const session = await socialApi.createHostedSession(currentTrack, playerPosition, playerStatus === "playing" ? "playing" : "paused");
       await connectListeningRoom(session, user!.id);
       await reloadOverview(false);
       const room = getListeningRoom();
       setActiveSessionId(room?.sessionId === session.id && room.connected ? session.id : "");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not start a listening room.");
+      setError(err instanceof Error ? err.message : "Could not start a listening party.");
     } finally {
       setBusy(false);
     }
@@ -551,34 +547,39 @@ export default function FriendsPage() {
 
         {!loading && activeTab === "listening" && <section className="flex flex-col gap-[18px]">
           <div className="rounded-xl border border-border-primary bg-bg-panel p-[17px]">
-            <h2 className="m-0 text-[16px] font-medium text-text-primary">Start a listening session</h2>
-            <p className="mb-[14px] mt-[5px] text-[12px] text-text-secondary">Your friend’s app will play the same song and follow your playback.</p>
-            <div className="flex flex-wrap items-end gap-[9px]">
-              <label className="min-w-[190px] flex-1 text-[12px] text-text-secondary">Invite a friend<select value={roomFriendId} onChange={(event) => setRoomFriendId(event.target.value)} className="mt-[6px] h-[44px] w-full rounded-md border border-border-primary bg-bg-primary px-[12px] text-[13px] text-text-primary" disabled={friends.length === 0}><option value="">Choose a friend</option>{friends.map((friend) => <option key={friend.id} value={friend.id}>{personName(friend)}</option>)}</select></label>
+            <h2 className="m-0 text-[16px] font-medium text-text-primary">Host a listening party</h2>
+            <p className="mb-[14px] mt-[5px] text-[12px] text-text-secondary">Your friends can find and join this room here. You control playback; everyone else follows along.</p>
+            <div className="flex flex-wrap items-center gap-[9px]">
               <div className="min-w-[220px] flex-1 rounded-md border border-border-primary bg-bg-primary px-[12px] py-[10px]"><p className="m-0 text-[10px] text-text-tertiary">Currently playing</p><p className="m-0 mt-[3px] truncate text-[12px] text-text-primary">{trackLine(currentTrack)}</p></div>
-              <Button onClick={() => void startListening()} disabled={busy || !roomFriendId || !currentTrack}>Invite and play together</Button>
+              <Button onClick={() => void startListeningParty()} disabled={busy || !currentTrack || !!activeSessionId}>Start listening party</Button>
             </div>
           </div>
 
           {activeSession && <div className="flex flex-wrap items-center gap-[13px] rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-[15px]">
             <img src={activeSession.track?.coverUrl || ""} alt="" className="h-[48px] w-[48px] rounded-md object-cover" />
-            <div className="min-w-[160px] flex-1"><p className="m-0 text-[13px] font-medium text-text-primary">{trackLine(activeSession.track)}</p><p className="m-0 mt-[3px] text-[11px] text-emerald-600 dark:text-emerald-400">{roomStatus || (activeSession.status === "waiting" ? "Waiting for your friend…" : "Listening together")}</p></div>
-            <Button size="sm" variant="secondary" onClick={() => void leaveListening()} disabled={busy}>Leave session</Button>
+            <div className="min-w-[160px] flex-1"><p className="m-0 text-[13px] font-medium text-text-primary">{activeSession.partyType === "playlist" ? `${activeSession.playlistTitle || "Shared playlist"} party` : trackLine(activeSession.track)}</p><p className="m-0 mt-[3px] text-[11px] text-emerald-600 dark:text-emerald-400">{roomStatus || (activeSession.status === "waiting" ? "Waiting for listeners…" : "Listening together")}</p></div>
+            <Button size="sm" variant="secondary" onClick={() => void leaveListening()} disabled={busy}>{activeSession.partyType === "friends" && activeSession.hostId === user.id ? "End party" : "Leave party"}</Button>
           </div>}
 
-          {sessions.length === 0 ? <EmptyState>No active listening sessions. Invite a friend while a song is playing.</EmptyState> : <div className="flex flex-col gap-[9px]">{sessions.map((session) => {
+          {sessions.length === 0 ? <EmptyState>No active listening parties. Start one, or join a friend’s room when it appears here.</EmptyState> : <div className="flex flex-col gap-[9px]">{sessions.map((session) => {
             const isHost = session.hostId === user.id;
             const other = isHost ? session.guest : session.host;
             const current = session.id === activeSessionId;
             return <div key={session.id} className="flex flex-wrap items-center gap-[12px] rounded-lg border border-border-primary bg-bg-panel px-[13px] py-[11px]">
               <img src={session.track?.coverUrl || ""} alt="" className="h-[42px] w-[42px] rounded object-cover" />
-              <div className="min-w-[180px] flex-1"><p className="m-0 truncate text-[13px] font-medium text-text-primary">{isHost ? `You invited ${personName(other)}` : `${personName(other)} invited you`}</p><p className="m-0 mt-[2px] truncate text-[11px] text-text-tertiary">{trackLine(session.track)}</p></div>
-              <span className="text-[11px] text-text-tertiary">{session.status === "waiting" ? "Invitation" : "In progress"}</span>
-              {current ? <Button size="sm" variant="secondary" onClick={() => setRoomStatus("Listening together")}>In this session</Button>
-                : <Button size="sm" onClick={() => void joinListening(session)} disabled={busy}>{isHost ? "Reconnect" : "Join"}</Button>}
+              <div className="min-w-[180px] flex-1"><p className="m-0 truncate text-[13px] font-medium text-text-primary">
+                {session.partyType === "playlist"
+                  ? `${session.playlistTitle || "Shared playlist"} party`
+                  : session.partyType === "friends"
+                    ? isHost ? "Your listening party" : `${personName(session.host)}’s listening party`
+                    : isHost ? `You invited ${personName(other)}` : `${personName(session.host)} invited you`}
+              </p><p className="m-0 mt-[2px] truncate text-[11px] text-text-tertiary">{session.partyType === "playlist" ? `${trackLine(session.track)} · ${session.memberCount ?? 1} members` : session.partyType === "friends" ? `${trackLine(session.track)} · ${session.memberCount ?? 1} listening` : trackLine(session.track)}</p></div>
+              <span className="text-[11px] text-text-tertiary">{session.myStatus === "invited" ? "Invitation" : !session.myStatus && session.partyType === "friends" ? "Open to friends" : session.status === "waiting" ? "Waiting for listeners" : "In progress"}</span>
+              {current ? <Button size="sm" variant="secondary" onClick={() => setRoomStatus("Listening together")}>In this room</Button>
+                : <Button size="sm" onClick={() => void joinListening(session)} disabled={busy}>{isHost ? "Reconnect" : !session.myStatus ? "Join party" : "Accept & join"}</Button>}
             </div>;
           })}</div>}
-          <p className="m-0 text-[11px] text-text-tertiary">Playback controls from either listener are shared. Each device streams the song separately, so a small delay can happen.</p>
+          <p className="m-0 text-[11px] text-text-tertiary">Playlist party members share playback controls. In a Friends party, only the host controls playback. Each device streams separately, so a small delay can happen.</p>
         </section>}
       </div>
     </div>
