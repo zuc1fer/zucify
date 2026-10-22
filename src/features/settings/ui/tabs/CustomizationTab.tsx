@@ -312,7 +312,7 @@ export function CustomizationTab({ searchQuery }: { searchQuery?: string }) {
             {/* Block Sliders */}
             <div className="flex flex-col gap-[12px] rounded-xl border border-border-primary/60 bg-border-alpha-14 p-[14px]">
               {/* Opacity Slider */}
-              <div className="flex items-center justify-between gap-[16px]">
+              <div className="flex items-center justify-between gap-[16px] max-md:flex-col max-md:items-stretch max-md:gap-2">
                 <div className="flex flex-col gap-[2px] min-w-0 max-w-[200px]">
                   <span className="text-text-primary text-[13px] font-[500]" style={font}>
                     {t("settings.customization.opacity") || "Opacity"}
@@ -321,7 +321,7 @@ export function CustomizationTab({ searchQuery }: { searchQuery?: string }) {
                     {t("settings.customization.opacity_desc") || "Background opacity level (min. 25%)"}
                   </span>
                 </div>
-                <div className="w-[190px] shrink-0">
+                <div className="w-[190px] shrink-0 max-md:w-full">
                   <Slider
                     value={currentBlockConfig.opacity}
                     onChange={(val) => setBlockConfig(activeBlock, { opacity: val })}
@@ -334,7 +334,7 @@ export function CustomizationTab({ searchQuery }: { searchQuery?: string }) {
               </div>
 
               {/* Backdrop Blur Slider */}
-              <div className="flex items-center justify-between gap-[16px]">
+              <div className="flex items-center justify-between gap-[16px] max-md:flex-col max-md:items-stretch max-md:gap-2">
                 <div className="flex flex-col gap-[2px] min-w-0 max-w-[200px]">
                   <span className="text-text-primary text-[13px] font-[500]" style={font}>
                     {t("settings.customization.blur") || "Backdrop blur"}
@@ -343,7 +343,7 @@ export function CustomizationTab({ searchQuery }: { searchQuery?: string }) {
                     {t("settings.customization.blur_desc") || "Frosted glass blur intensity"}
                   </span>
                 </div>
-                <div className="w-[190px] shrink-0">
+                <div className="w-[190px] shrink-0 max-md:w-full">
                   <Slider
                     value={currentBlockConfig.blur}
                     onChange={(val) => setBlockConfig(activeBlock, { blur: val })}
@@ -356,7 +356,7 @@ export function CustomizationTab({ searchQuery }: { searchQuery?: string }) {
               </div>
 
               {/* Dimming Slider */}
-              <div className="flex items-center justify-between gap-[16px]">
+              <div className="flex items-center justify-between gap-[16px] max-md:flex-col max-md:items-stretch max-md:gap-2">
                 <div className="flex flex-col gap-[2px] min-w-0 max-w-[200px]">
                   <span className="text-text-primary text-[13px] font-[500]" style={font}>
                     {t("settings.customization.dim") || "Dimming"}
@@ -365,7 +365,7 @@ export function CustomizationTab({ searchQuery }: { searchQuery?: string }) {
                     {t("settings.customization.dim_desc") || "Dark overlay for enhanced readability"}
                   </span>
                 </div>
-                <div className="w-[190px] shrink-0">
+                <div className="w-[190px] shrink-0 max-md:w-full">
                   <Slider
                     value={currentBlockConfig.dim}
                     onChange={(val) => setBlockConfig(activeBlock, { dim: val })}

@@ -1110,18 +1110,50 @@ export class ListeningRoom {
       if (!session || session.status === "ended" || !member || session.partyType === "friends" || attachment.userId === session.host_id) return;
       const action = event.action;
       if (!action || !["play", "pause", "resume", "seek"].includes(action.type)) return;
-      const control = action.type === "play"
-        ? { type: "play", track: parseTrack(action.track) }
-        : action.type === "seek"
-          ? { type: "seek", positionMs: Math.max(0, Math.min(Number(action.positionMs) || 0, 24 * 60 * 60 * 1000)) }
-          : { type: action.type };
-      if (control.type === "play" && !control.track) return;
-      for (const peer of this.state.getWebSockets()) {
-        const peerData = peer.deserializeAttachment() as { userId?: string } | null;
-        if (peerData?.userId === session.host_id) {
-          try { peer.send(JSON.stringify({ type: "control", action: control })); } catch {}
-        }
+      const current = await this.state.storage.get("snapshot") as any;
+      if (!current?.track) return;
+      const now = Date.now();
+      const maxPositionMs = Number(current.track.durationMs) > 0
+        ? Number(current.track.durationMs)
+        : 24 * 60 * 60 * 1000;
+      const currentPositionMs = Math.min(
+        maxPositionMs,
+        Math.max(0, Number(current.positionMs) + (current.status === "playing" ? Math.max(0, now - Number(current.updatedAt || now)) : 0)),
+      );
+      let track = current.track;
+      let positionMs = currentPositionMs;
+      let status = current.status === "paused" ? "paused" : "playing";
+      if (action.type === "play") {
+        track = parseTrack(action.track);
+        if (!track) return;
+        positionMs = 0;
+        status = "playing";
+      } else if (action.type === "pause") {
+        status = "paused";
+      } else if (action.type === "resume") {
+        status = "playing";
+      } else {
+        if (!Number.isFinite(action.positionMs)) return;
+        positionMs = Math.min(maxPositionMs, Math.max(0, Number(action.positionMs)));
       }
+      if (action.type === "play" && session.partyType === "playlist") {
+        const included = await this.env.DB.prepare(
+          "SELECT 1 AS ok FROM listening_session_tracks WHERE session_id=? AND track_id=?",
+        ).bind(attachment.sessionId, track.id).first();
+        if (!included) return;
+      }
+      const snapshot = {
+        ...current,
+        track,
+        positionMs,
+        status,
+        updatedAt: now,
+      };
+      await this.state.storage.put("snapshot", snapshot);
+      await this.env.DB.prepare(
+        "UPDATE listening_sessions SET track_json=?, position_ms=?, playback_status=?, updated_at=? WHERE id=? AND status!='ended'",
+      ).bind(JSON.stringify(track), positionMs, status, now, attachment.sessionId).run();
+      this.broadcast({ type: "state", ...snapshot });
       return;
     }
     if (event?.type !== "sync") return;
@@ -1130,7 +1162,9 @@ export class ListeningRoom {
     const member = await this.env.DB.prepare(
       "SELECT 1 AS ok FROM listening_session_members WHERE session_id=? AND user_id=? AND status='active'",
     ).bind(attachment.sessionId, attachment.userId).first();
-    if (!session || session.status === "ended" || !member || (session.partyType !== "playlist" && attachment.userId !== session.host_id)) return;
+    // The host is the only source of shared room state. Playlist members send
+    // controls to the host, which then publishes the authoritative state.
+    if (!session || session.status === "ended" || !member || attachment.userId !== session.host_id) return;
     const track = parseTrack(event.track);
     const positionMs = Number.isFinite(event.positionMs) ? Math.max(0, Math.min(Number(event.positionMs), 24 * 60 * 60 * 1000)) : 0;
     const status = event.status === "paused" ? "paused" : "playing";

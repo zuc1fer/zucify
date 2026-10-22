@@ -29,7 +29,7 @@ import { useTranslation } from "@/languages";
 import { BRANDING_ACCENTS } from "../branding";
 
 const iconButtonClass =
-  "inline-flex h-[28px] w-[28px] items-center justify-center text-white opacity-70 transition-all duration-150 ease-out hover:opacity-100 active:scale-[0.94] shrink-0 border-none bg-transparent cursor-pointer";
+  "inline-flex h-[28px] w-[28px] max-md:h-[40px] max-md:w-[40px] items-center justify-center text-white opacity-70 transition-all duration-150 ease-out hover:opacity-100 active:scale-[0.94] shrink-0 border-none bg-transparent cursor-pointer";
 
 function PlayPauseIcon({ status }: { status: string }) {
   const loading = status === "loading";
@@ -103,7 +103,7 @@ export function PlayerUiElements({
     <>
       {/* Artwork (Compact, flat, no drop shadows) */}
       <div
-        className={`relative shrink-0 overflow-hidden rounded-xl w-[280px] h-[280px] max-md:w-[min(280px,64vw,32dvh)] max-md:h-[min(280px,64vw,32dvh)] bg-black/20 ${
+        className={`relative shrink-0 overflow-hidden rounded-2xl w-[280px] h-[280px] max-md:w-[min(340px,82vw,38dvh)] max-md:h-[min(340px,82vw,38dvh)] bg-black/20 ${
           coverUrl && !isCoverLoaded ? "animate-pulse" : ""
         }`}
       >
@@ -138,7 +138,7 @@ export function PlayerUiElements({
         <button
           type="button"
           aria-label={isLiked ? t("common.unlike") : t("common.like")}
-          className={`absolute bottom-2.5 left-2.5 z-20 inline-flex h-[30px] w-[30px] items-center justify-center rounded-full transition-colors duration-200 ease-out active:scale-[0.92] bg-black/40 backdrop-blur-md border-none hover:bg-black/60 ${
+          className={`absolute bottom-2.5 left-2.5 z-20 inline-flex h-[30px] w-[30px] max-md:h-[40px] max-md:w-[40px] items-center justify-center rounded-full transition-colors duration-200 ease-out active:scale-[0.92] bg-black/40 backdrop-blur-md border-none hover:bg-black/60 ${
             isLiked ? "text-white" : "text-white/70 hover:text-white"
           }`}
           onClick={handleLikeToggle}
@@ -169,15 +169,15 @@ export function PlayerUiElements({
       </div>
 
       {/* Track info */}
-      <div className="w-[280px] max-md:w-[min(280px,84vw)] flex items-start justify-center min-w-0">
-        <div className="flex flex-col gap-[2px] min-w-0 text-center">
+      <div className="w-[280px] max-md:w-[min(340px,84vw)] flex items-start justify-center min-w-0 max-md:justify-start">
+        <div className="flex flex-col gap-[2px] min-w-0 text-center max-md:text-left">
           <p
-            className="m-0 text-[15px] font-[600] text-white flex items-center justify-center gap-[6px] max-w-[280px]"
+            className="m-0 text-[15px] font-[600] text-white flex items-center justify-center gap-[6px] max-w-[280px] max-md:max-w-full max-md:justify-start max-md:text-[17px]"
             style={{ letterSpacing: "-0.03em" }}
           >
             <span className="min-w-0 truncate">{trackTitle}</span>
           </p>
-          <p className="m-0 flex items-center justify-center gap-[5px] text-[12px] text-white/60 leading-snug max-w-[320px] overflow-hidden">
+          <p className="m-0 flex items-center justify-center gap-[5px] text-[12px] text-white/60 leading-snug max-w-[320px] overflow-hidden max-md:max-w-full max-md:justify-start max-md:text-[13px]">
             {track?.explicit && (
               <ExplicitBadge className="!bg-white/60 !text-black !pb-0 !leading-none shrink-0" />
             )}
@@ -204,12 +204,12 @@ export function PlayerUiElements({
         disabled={playbackControlLocked}
         showTime
         size="md"
-        className="w-[320px] max-md:w-[88vw]"
+        className="w-[320px] max-md:w-[min(340px,88vw)]"
         fillColor={BRANDING_ACCENTS[player.accentVariant]}
       />
 
       {/* Primary Playback Controls */}
-      <div className="flex items-center gap-[14px]">
+      <div className="flex items-center gap-[14px] max-md:gap-[min(12px,2.5vw)]">
         {playbackControlLocked && <span className="text-[10px] text-white/55">Following host</span>}
         <button
           type="button"
@@ -241,7 +241,7 @@ export function PlayerUiElements({
           title={playbackControlLocked ? "Playback is controlled by the host" : undefined}
           disabled={playbackControlLocked}
           onClick={() => void playerEngine.togglePlayPause()}
-          className="inline-flex h-[36px] w-[36px] items-center justify-center text-white opacity-85 transition-all duration-150 ease-out hover:opacity-100 active:scale-[0.94] shrink-0 border-none bg-transparent cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
+          className="inline-flex h-[36px] w-[36px] max-md:h-[52px] max-md:w-[52px] items-center justify-center text-white opacity-85 transition-all duration-150 ease-out hover:opacity-100 active:scale-[0.94] shrink-0 border-none bg-transparent cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
         >
           <PlayPauseIcon status={player.status} />
         </button>
@@ -281,7 +281,7 @@ export function PlayerUiElements({
       </div>
 
       {/* Volume (Compact smooth slider, size sm) */}
-      <VolumePicker className="w-[180px]" size="sm" />
+      <VolumePicker className="w-[180px] max-md:hidden" size="sm" />
     </>
   );
 }

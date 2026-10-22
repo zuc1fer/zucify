@@ -235,10 +235,25 @@ export default function SettingsModal() {
       open={open}
       onOpenChange={(next) => (!next ? handleClose() : undefined)}
       maxWidth={880}
-      className="p-0 h-[620px] max-h-[86vh] !flex-row overflow-hidden !bg-bg-elevated !border-0"
+      className="p-0 h-[620px] max-h-[86vh] !flex-row overflow-hidden !bg-bg-elevated !border-0 max-md:!m-0 max-md:!h-[100dvh] max-md:!max-h-none max-md:!max-w-none max-md:!flex-col max-md:!rounded-none max-md:pt-[env(safe-area-inset-top)]"
     >
-      <aside className="w-[248px] shrink-0 flex flex-col min-h-0 bg-transparent">
-        <div className="px-[12px] pt-[14px] pb-[8px]">
+      <aside className="w-[248px] shrink-0 flex flex-col min-h-0 bg-transparent max-md:w-full max-md:shrink-0">
+        <div className="hidden max-md:flex items-center justify-between px-4 pt-3 pb-2">
+          <div className="min-w-0">
+            <h2 className="m-0 text-[20px] font-semibold text-text-primary" style={font}>
+              {t("settings.title")}
+            </h2>
+          </div>
+          <button
+            type="button"
+            aria-label={t("common.close") || "Close"}
+            onClick={handleClose}
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-border-alpha-14 text-text-primary"
+          >
+            <CloseLine size={19} />
+          </button>
+        </div>
+        <div className="px-[12px] pt-[14px] pb-[8px] max-md:px-4 max-md:pt-1 max-md:pb-3">
           <div className="relative flex items-center">
             <Search2Line
               size={15}
@@ -249,7 +264,7 @@ export default function SettingsModal() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t("settings.search_placeholder")}
-              className="w-full h-[32px] pl-[30px] pr-[26px] bg-border-alpha-14 text-text-primary text-[13px] rounded-[8px] border-0 outline-none placeholder:text-text-tertiary focus:bg-border-alpha-20 transition-colors"
+              className="w-full h-[32px] pl-[30px] pr-[26px] bg-border-alpha-14 text-text-primary text-[13px] rounded-[8px] border-0 outline-none placeholder:text-text-tertiary focus:bg-border-alpha-20 transition-colors max-md:h-11 max-md:rounded-xl max-md:pl-10 max-md:text-base"
               style={font}
             />
             {searchQuery && (
@@ -265,7 +280,7 @@ export default function SettingsModal() {
         </div>
 
         <nav
-          className="flex-1 min-h-0 overflow-y-auto px-[12px] pb-[12px] flex flex-col gap-[14px]"
+          className="flex-1 min-h-0 overflow-y-auto px-[12px] pb-[12px] flex flex-col gap-[14px] max-md:hidden"
           role="tablist"
           aria-label={t("settings.title")}
         >
@@ -339,7 +354,57 @@ export default function SettingsModal() {
           </div>
         </nav>
 
-        <div className="shrink-0 p-[12px] pt-[8px]">
+        <nav
+          className="hidden max-md:flex min-w-0 flex-none gap-2 overflow-x-auto px-4 pb-3"
+          role="tablist"
+          aria-label={t("settings.title")}
+          style={{ scrollbarWidth: "none" }}
+        >
+          {TAB_GROUPS.flatMap((group) => group.ids)
+            .filter((id) => !matchingTabIds || matchingTabIds.has(id))
+            .map((id) => {
+              const isActive = activeTab === id;
+              const Icon = TAB_ICONS[id];
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => setActiveTab(id)}
+                  className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-full border px-3 text-[12px] transition-colors ${
+                    isActive
+                      ? "border-border-alpha-20 bg-border-alpha-14 text-text-primary"
+                      : "border-transparent bg-transparent text-text-secondary"
+                  }`}
+                  style={font}
+                >
+                  <Icon size={16} weight="Bold" />
+                  <span>{tabLabels[id]}</span>
+                </button>
+              );
+            })}
+          <button
+            type="button"
+            onClick={() => openExternal("https://github.com/zuc1fer/zucify/blob/main/README.md")}
+            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full border border-transparent bg-transparent px-3 text-[12px] text-text-secondary"
+            style={font}
+          >
+            <Book2 size={16} weight="Bold" />
+            <span>{t("settings.docs")}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => openExternal("https://t.me/liner_app?direct")}
+            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full border border-transparent bg-transparent px-3 text-[12px] text-text-secondary"
+            style={font}
+          >
+            <QuestionCircle size={16} weight="Bold" />
+            <span>{t("settings.support")}</span>
+          </button>
+        </nav>
+
+        <div className="shrink-0 p-[12px] pt-[8px] max-md:px-4 max-md:py-2">
           <div className="flex items-center gap-[10px] px-[6px] py-[4px] min-w-0">
             <span className="relative shrink-0">
               <UserAvatar user={user ?? null} size={32} />
@@ -376,9 +441,9 @@ export default function SettingsModal() {
       </aside>
 
       {/* ── Right secondary frame: same roundness, inset with padding, darker ── */}
-      <div className="flex-1 min-w-0 min-h-0 p-[2px] flex">
-        <div className="flex-1 min-w-0 min-h-0 flex flex-col rounded-xl bg-bg-primary overflow-hidden">
-        <div className="flex items-start justify-between gap-[16px] px-[24px] pt-[20px] pb-[10px] shrink-0">
+      <div className="flex-1 min-w-0 min-h-0 p-[2px] flex max-md:p-0">
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col rounded-xl bg-bg-primary overflow-hidden max-md:rounded-none">
+        <div className="flex items-start justify-between gap-[16px] px-[24px] pt-[20px] pb-[10px] shrink-0 max-md:px-4 max-md:pt-3 max-md:pb-2">
           <div className="min-w-0">
             <h3
               className="text-text-primary text-[15px] m-0 font-[600] tracking-[-0.01em]"
@@ -397,13 +462,13 @@ export default function SettingsModal() {
             type="button"
             aria-label={t("common.close") || "Close"}
             onClick={handleClose}
-            className="w-[28px] h-[28px] shrink-0 inline-flex items-center justify-center rounded-md text-text-tertiary hover:text-text-primary hover:bg-border-alpha-14 transition-colors border-0 bg-transparent p-0 cursor-pointer"
+            className="w-[28px] h-[28px] shrink-0 inline-flex items-center justify-center rounded-md text-text-tertiary hover:text-text-primary hover:bg-border-alpha-14 transition-colors border-0 bg-transparent p-0 cursor-pointer max-md:hidden"
           >
             <CloseLine size={17} />
           </button>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto px-[24px] pb-[16px] flex flex-col">
+        <div className="flex-1 min-h-0 overflow-y-auto px-[24px] pb-[16px] flex flex-col max-md:px-4 max-md:pb-[calc(env(safe-area-inset-bottom)+16px)]">
           <motion.div
             key={activeTab}
             initial={{ opacity: 0, y: 7 }}

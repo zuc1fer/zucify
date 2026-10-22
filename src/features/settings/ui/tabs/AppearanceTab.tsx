@@ -204,7 +204,7 @@ export function AppearanceTab({ searchQuery }: { searchQuery?: string }) {
               value={locale}
               onChange={setLocale}
               align="bottom-right"
-              className="min-w-[130px]"
+              className="min-w-[130px] max-md:!w-full"
               aria-label={t("settings.language.label")}
             />
           ) : (
@@ -226,7 +226,7 @@ export function AppearanceTab({ searchQuery }: { searchQuery?: string }) {
         searchQuery={searchQuery}
       >
         {mounted ? (
-          <div className="grid grid-cols-3 gap-[10px]">
+          <div className="grid grid-cols-3 gap-[10px] max-md:grid-cols-2">
             {(
               [
                 { value: "system", label: t("settings.theme.system") },

@@ -81,16 +81,17 @@ function SongCard({
   const { t } = useTranslation();
   const [imageLoaded, setImageLoaded] = useState(() => isCoverReady(coverUrl));
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPointerTypeRef = useRef<string>("mouse");
 
   useEffect(() => {
     setImageLoaded(isCoverReady(coverUrl));
   }, [coverUrl]);
 
-  const imageSizeClass = compact ? "h-[40px] w-[40px]" : "h-[48px] w-[48px]";
-  const titleSizeClass = compact ? "text-[14px]" : "text-[16px]";
-  const artistSizeClass = compact ? "text-[12px]" : "text-[15px]";
-  const gapClass = compact ? "gap-[12px]" : "gap-[16px]";
-  const paddingClass = compact ? "p-[6px]" : "p-[8px]";
+  const imageSizeClass = compact ? "h-[40px] w-[40px]" : "h-[48px] w-[48px] max-md:h-[42px] max-md:w-[42px]";
+  const titleSizeClass = compact ? "text-[14px]" : "text-[16px] max-md:text-[14px]";
+  const artistSizeClass = compact ? "text-[12px]" : "text-[15px] max-md:text-[12px]";
+  const gapClass = compact ? "gap-[12px]" : "gap-[16px] max-md:gap-[10px]";
+  const paddingClass = compact ? "p-[6px]" : "p-[8px] max-md:px-[6px] max-md:py-[5px]";
   const currentTrackStyle: React.CSSProperties | undefined = isCurrentTrack
     ? {
         "--song-playing-accent": playbackAccent,
@@ -106,6 +107,17 @@ function SongCard({
       return;
     }
     if (!onPlay) return;
+    const isTouchInput =
+      lastPointerTypeRef.current !== "mouse" ||
+      (typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches);
+    if (isTouchInput) {
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = null;
+      }
+      onPlay();
+      return;
+    }
     if (!onDoubleClick) {
       onPlay();
       return;
@@ -138,6 +150,7 @@ function SongCard({
       style={currentTrackStyle}
       onClick={handleClick}
       onPointerDown={(e) => {
+        lastPointerTypeRef.current = e.pointerType || "mouse";
         if (clickTimerRef.current) {
           clearTimeout(clickTimerRef.current);
           clickTimerRef.current = null;
@@ -207,7 +220,7 @@ function SongCard({
         <div className="min-w-0 flex flex-col gap-[2px]">
           <div className="flex items-center gap-[8px]">
             <h3
-              className={`m-0 flex max-w-[min(52vw,560px)] min-w-0 items-center gap-[7px] overflow-hidden text-ellipsis whitespace-nowrap ${titleSizeClass} leading-[1.2] text-text-primary`}
+              className={`m-0 flex max-w-[min(52vw,560px)] min-w-0 items-center gap-[7px] overflow-hidden text-ellipsis whitespace-nowrap ${titleSizeClass} leading-[1.2] text-text-primary max-md:max-w-[min(46vw,560px)]`}
               style={{
                 fontFamily: "var(--font-inter), sans-serif",
                 fontWeight: 400,
@@ -262,7 +275,7 @@ function SongCard({
         </div>
       </div>
 
-      <div className="flex items-center shrink-0 ml-[16px] gap-[10px]">
+      <div className="flex items-center shrink-0 ml-[16px] gap-[10px] max-md:ml-[6px] max-md:gap-[5px]">
         {rightContent}
         {releaseDate && (
           <span
@@ -277,7 +290,7 @@ function SongCard({
         )}
         {duration && (
           <span
-            className="text-[14px] text-text-tertiary"
+            className="text-[14px] text-text-tertiary max-md:hidden"
             style={{
               fontFamily: "var(--font-inter), sans-serif",
               fontWeight: 400,
@@ -292,7 +305,7 @@ function SongCard({
               <button
                 type="button"
                 aria-label={t("common.more_options")}
-                className="rounded-md bg-transparent border-0 p-0 text-text-primary transition-all duration-200 active:scale-[0.96] flex items-center justify-center cursor-pointer"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md border-0 bg-transparent p-0 text-text-primary transition-all duration-200 active:scale-[0.96] cursor-pointer max-md:h-10 max-md:w-10"
               >
                 <More2Fill size={22} />
               </button>

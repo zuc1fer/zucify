@@ -17,6 +17,7 @@ export interface EntitySidebarProps {
   actions?: ReactNode;
   onBack?: () => void;
   backLabel?: string;
+  mobileCompact?: boolean;
 }
 
 export function EntitySidebar({
@@ -29,9 +30,14 @@ export function EntitySidebar({
   actions,
   onBack,
   backLabel = "Back",
+  mobileCompact = false,
 }: EntitySidebarProps) {
+  const mobileAside = mobileCompact
+    ? "max-md:static max-md:w-full max-md:shrink-0 max-md:flex max-md:flex-col max-md:items-center max-md:pt-[calc(env(safe-area-inset-top)+60px)] max-md:pb-4"
+    : "";
+
   return (
-    <aside className="sticky top-[20px] w-[280px] shrink-0 self-start" data-no-window-drag>
+    <aside className={`sticky top-[20px] w-[280px] shrink-0 self-start ${mobileAside}`} data-no-window-drag>
       {onBack && (
         <button
           type="button"
@@ -47,13 +53,13 @@ export function EntitySidebar({
       <div
         className={`relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md ${
           coverClassName || "bg-border-alpha-14"
-        } ${onBack ? "mt-[16px]" : ""}`}
+        } ${onBack ? "mt-[16px]" : ""} ${mobileCompact ? "max-md:w-[min(220px,58vw)] max-md:rounded-2xl" : ""}`}
       >
         {cover}
       </div>
 
       <div
-        className="mt-[16px] min-w-0"
+        className={`mt-[16px] min-w-0 ${mobileCompact ? "max-md:w-full max-md:text-center" : ""}`}
         style={{ fontFamily: "var(--font-inter), sans-serif", fontWeight: 600 }}
       >
         {title}
@@ -61,7 +67,7 @@ export function EntitySidebar({
 
       {subtitle && (
         <div
-          className="mt-[6px]"
+          className={`mt-[6px] ${mobileCompact ? "max-md:w-full max-md:text-center" : ""}`}
           style={{ fontFamily: "var(--font-inter), sans-serif" }}
         >
           {subtitle}
@@ -70,14 +76,14 @@ export function EntitySidebar({
 
       {meta && (
         <div
-          className="m-0 mt-[8px] text-[12px] leading-[1.4] text-text-tertiary"
+          className={`m-0 mt-[8px] text-[12px] leading-[1.4] text-text-tertiary ${mobileCompact ? "max-md:w-full max-md:text-center" : ""}`}
           style={{ fontFamily: "var(--font-inter), sans-serif", fontWeight: 400 }}
         >
           {meta}
         </div>
       )}
 
-      {primaryAction && <div className="mt-[16px]">{primaryAction}</div>}
+      {primaryAction && <div className={`mt-[16px] ${mobileCompact ? "max-md:w-full max-md:max-w-[420px]" : ""}`}>{primaryAction}</div>}
 
       {actions && (
         <div className="mt-[8px] flex items-center gap-[8px]">{actions}</div>

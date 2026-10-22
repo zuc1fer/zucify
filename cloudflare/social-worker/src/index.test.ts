@@ -64,11 +64,15 @@ function createRoom(partyType: "friends" | "playlist") {
     },
   };
   const room = new ListeningRoom(state as any, { DB } as any);
-  return { room, sockets, updates, currentTrack };
+  return { room, sockets, updates, currentTrack, storageValues };
 }
 
 function syncMessage(trackId: string) {
   return JSON.stringify({ type: "sync", track: track(trackId), positionMs: 0, status: "playing" });
+}
+
+function controlMessage(action: Record<string, unknown>) {
+  return JSON.stringify({ type: "control", action });
 }
 
 describe("ListeningRoom party permissions", () => {
@@ -83,15 +87,32 @@ describe("ListeningRoom party permissions", () => {
     expect(JSON.parse(sockets[1].sent.at(-1)!).track.id).toBe("host-track");
   });
 
-  it("lets playlist members control playback only from the queue snapshot", async () => {
-    const { room, sockets, updates, currentTrack } = createRoom("playlist");
+  it("applies playlist member controls to everyone and accepts only queued tracks", async () => {
+    const { room, sockets, updates, storageValues } = createRoom("playlist");
 
     await room.webSocketMessage(sockets[1], syncMessage("added-after-start"));
     expect(updates).toHaveLength(0);
-    expect(JSON.parse(sockets[1].sent.at(-1)!).track.id).toBe(currentTrack.id);
+    expect(sockets[1].sent).toHaveLength(0);
+
+    await room.webSocketMessage(sockets[1], controlMessage({ type: "play", track: track("added-after-start") }));
+    expect(sockets[0].sent).toHaveLength(0);
+
+    await room.webSocketMessage(sockets[1], controlMessage({ type: "play", track: track("queued-track") }));
+    expect(updates).toHaveLength(1);
+    expect(JSON.parse(sockets[0].sent.at(-1)!).track.id).toBe("queued-track");
+    expect(JSON.parse(sockets[1].sent.at(-1)!).track.id).toBe("queued-track");
 
     await room.webSocketMessage(sockets[1], syncMessage("queued-track"));
     expect(updates).toHaveLength(1);
-    expect(JSON.parse(sockets[0].sent.at(-1)!).track.id).toBe("queued-track");
+
+    await room.webSocketMessage(sockets[1], controlMessage({ type: "pause" }));
+    expect(JSON.parse(sockets[0].sent.at(-1)!).status).toBe("paused");
+    await room.webSocketMessage(sockets[1], controlMessage({ type: "seek", positionMs: 45_000 }));
+    expect(JSON.parse(sockets[0].sent.at(-1)!).positionMs).toBe(45_000);
+    expect((storageValues.get("snapshot") as any).positionMs).toBe(45_000);
+
+    await room.webSocketMessage(sockets[0], syncMessage("queued-track"));
+    expect(updates).toHaveLength(4);
+    expect(JSON.parse(sockets[1].sent.at(-1)!).track.id).toBe("queued-track");
   });
 });

@@ -330,6 +330,7 @@ export function FullscreenPlayer({
 }: FullscreenPlayerProps) {
   const { t } = useTranslation();
   const player = usePlayerState();
+  const [mobileView, setMobileView] = useState<"player" | "lyrics">("player");
   const coverUrl = player.currentTrack?.coverUrl;
   const kawarpSrc = useCoverSrc(coverUrl);
 
@@ -406,17 +407,26 @@ export function FullscreenPlayer({
 
       <div className="absolute inset-0 z-[1] bg-black/40" />
 
-      <div className="absolute inset-0 z-10 flex max-md:flex-col">
-        <div className="flex-1 flex flex-col items-center justify-center gap-5 max-md:h-[58%] max-md:flex-none max-md:gap-2 max-md:pt-[calc(env(safe-area-inset-top)+20px)] max-md:pb-2">
+      <div className="absolute inset-0 z-10 flex">
+        <div className={`flex-1 flex flex-col items-center justify-center gap-5 max-md:h-full max-md:flex-none max-md:gap-[clamp(12px,2.4dvh,22px)] max-md:overflow-y-auto max-md:overscroll-contain max-md:pt-[calc(env(safe-area-inset-top)+72px)] max-md:pb-[calc(env(safe-area-inset-bottom)+20px)] ${mobileView === "player" ? "max-md:flex" : "max-md:hidden"}`}>
           <PlayerUiElements onClose={onClose} />
         </div>
 
-        <div className="relative flex h-full min-h-0 flex-1 flex-col pl-2 pr-6 max-md:h-auto max-md:w-full max-md:px-4 max-md:pb-[env(safe-area-inset-bottom)]">
+        <div className={`relative flex h-full min-h-0 flex-1 flex-col pl-2 pr-6 max-md:absolute max-md:inset-0 max-md:z-20 max-md:h-full max-md:w-full max-md:px-4 max-md:pt-[calc(env(safe-area-inset-top)+72px)] max-md:pb-[calc(env(safe-area-inset-bottom)+12px)] ${mobileView === "lyrics" ? "max-md:flex" : "max-md:hidden"}`}>
           {showProviderIsland && (
-            <div className="absolute top-[12px] left-1/2 -translate-x-1/2 z-30 pointer-events-none flex justify-center max-md:top-[4px]">
+            <div className="absolute top-[12px] left-1/2 -translate-x-1/2 z-30 pointer-events-none flex justify-center max-md:top-[calc(env(safe-area-inset-top)+58px)]">
               <LyricsProviderIsland />
             </div>
           )}
+
+          <div className="hidden max-md:flex min-w-0 flex-col items-center pb-3 text-center">
+            <p className="m-0 max-w-full truncate text-[17px] font-semibold text-text-primary">
+              {player.currentTrack?.title}
+            </p>
+            <p className="m-0 max-w-full truncate text-[13px] text-text-secondary">
+              {player.currentTrack?.artists}
+            </p>
+          </div>
 
           <div
             className="flex-1 min-h-0 relative w-full h-full"
@@ -522,6 +532,32 @@ export function FullscreenPlayer({
       >
         <DownLine size={18} />
       </button>
+
+      <div
+        role="tablist"
+        aria-label={t("player.open_player")}
+        className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+9px)] z-30 hidden -translate-x-1/2 items-center gap-1 rounded-full border border-white/10 bg-black/35 p-1 text-white/75 shadow-lg backdrop-blur-xl max-md:flex"
+      >
+        {([
+          ["player", t("player.open_player")],
+          ["lyrics", t("player.lyrics")],
+        ] as const).map(([view, label]) => (
+          <button
+            key={view}
+            type="button"
+            role="tab"
+            aria-selected={mobileView === view}
+            onClick={() => setMobileView(view)}
+            className={`h-9 min-w-[92px] rounded-full border-0 px-4 text-[12px] font-medium transition-colors ${
+              mobileView === view
+                ? "bg-white/15 text-white"
+                : "bg-transparent text-white/60"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

@@ -784,7 +784,7 @@ function LibraryPlaylistContent() {
   return (
     <div className="relative h-full w-full overflow-hidden bg-transparent">
 
-      <div className="absolute top-0 left-0 right-0 h-[56px] z-10 flex flex-row items-stretch select-none pointer-events-none">
+      <div className="absolute top-0 left-0 right-0 h-[56px] z-10 flex flex-row items-stretch select-none pointer-events-none max-md:hidden">
         <div
           data-window-drag
           onContextMenu={(e) => e.preventDefault()}
@@ -803,7 +803,7 @@ function LibraryPlaylistContent() {
         aria-label={t("common.back")}
         data-no-tooltip="true"
         data-no-window-drag
-        className={`absolute top-[12px] left-[32px] z-20 group inline-flex h-[32px] shrink-0 items-center gap-[6px] rounded-md px-[10px] active:scale-[0.94] transition-all cursor-pointer select-none pointer-events-auto text-[13px] font-[500] border-0 !border-none ${
+        className={`absolute top-[12px] left-[32px] z-20 group inline-flex h-[32px] shrink-0 items-center gap-[6px] rounded-md px-[10px] active:scale-[0.94] transition-all cursor-pointer select-none pointer-events-auto text-[13px] font-[500] border-0 !border-none max-md:top-[calc(env(safe-area-inset-top)+10px)] max-md:left-3 max-md:h-10 max-md:w-10 max-md:justify-center max-md:rounded-full max-md:p-0 ${
           hasCustomBg
             ? "apple-glass-pill !border-none"
             : "bg-bg-panel/85 backdrop-blur-xl text-text-primary hover:bg-bg-panel border-0 !border-none"
@@ -814,17 +814,18 @@ function LibraryPlaylistContent() {
           size={16}
           className="transition-transform duration-150 group-hover:-translate-x-0.5"
         />
-        <span className="relative -left-[1.5px] top-[1px]">{t("common.back")}</span>
+        <span className="relative -left-[1.5px] top-[1px] max-md:hidden">{t("common.back")}</span>
       </button>
       {/* track search sits centred in the page header */}
       {viewData && isReady && (
-        <div className="absolute top-[12px] left-0 right-0 z-20 flex justify-center pointer-events-none">
+        <div className="absolute top-[12px] left-0 right-0 z-20 flex justify-center pointer-events-none max-md:top-[calc(env(safe-area-inset-top)+10px)] max-md:justify-end max-md:px-3">
           <TrackSearchField
             search={search}
             totalCount={currentTracks.length}
             placeholder={t("track_search.placeholder_playlist")}
             glass={hasCustomBg}
             onSubmit={handleSearchSubmit}
+            className="max-md:!h-10 max-md:!w-[min(230px,calc(100vw-88px))] max-md:!rounded-full"
           />
         </div>
       )}
@@ -835,12 +836,13 @@ function LibraryPlaylistContent() {
               isReady ? "opacity-100" : "opacity-0 pointer-events-none"
             }`}
           >
-            <div className="relative z-10 flex flex-row items-stretch gap-[16px] pl-[32px] pr-[16px] h-full w-full min-h-0 box-border">
+            <div className="relative z-10 flex flex-row items-stretch gap-[16px] pl-[32px] pr-[16px] h-full w-full min-h-0 box-border max-md:flex-col max-md:gap-0 max-md:px-4">
               <div
-                className="shrink-0 w-[280px] self-start pt-[56px] pb-[24px]"
+                className="shrink-0 w-[280px] self-start pt-[56px] pb-[24px] max-md:w-full max-md:pt-0 max-md:pb-2"
                 data-no-window-drag
               >
                 <EntitySidebar
+                mobileCompact
                 coverClassName={
                   hasCustomBg && (viewData.coverUrls?.length ?? (viewData.coverUrl ? 1 : 0)) === 0
                     ? "apple-glass-static pointer-events-none"
@@ -1022,7 +1024,7 @@ function LibraryPlaylistContent() {
                         variant={hasCustomBg ? "glass-primary" : "primary"}
                         onClick={handlePlayAll}
                         disabled={partyQueueTracks.length === 0}
-                        className="!h-[36px] w-full !text-[13.5px] !font-[500] px-[16px] flex items-center justify-center gap-[6px]"
+                        className="!h-[36px] w-full !text-[13.5px] !font-[500] px-[16px] flex items-center justify-center gap-[6px] max-md:!h-12"
                       >
                         <PlayFill size={16} />
                         <span>{t("common.play_all")}</span>
@@ -1033,7 +1035,7 @@ function LibraryPlaylistContent() {
                           variant={hasCustomBg ? "glass-action" : "outline"}
                           onClick={handleAddToQueue}
                           disabled={currentTracks.length === 0 || playlistPartyActive}
-                          className={`!h-[36px] flex-1 min-w-0 !text-[13px] !font-[500] px-[12px] flex items-center justify-center gap-[6px] ${
+                          className={`!h-[36px] flex-1 min-w-0 !text-[13px] !font-[500] px-[12px] flex items-center justify-center gap-[6px] max-md:!h-11 ${
                             // optical centring: with three icon buttons beside it the label reads 1px right
                             !isLikesMode ? "[&>*]:-translate-x-px" : ""
                           }`}
@@ -1071,7 +1073,7 @@ function LibraryPlaylistContent() {
                           variant={hasCustomBg ? "glass-action" : "outline"}
                           onClick={handleShufflePlay}
                           disabled={currentTracks.length === 0 || playlistPartyActive}
-                          className="!h-[36px] !w-[36px] shrink-0 !p-0 flex items-center justify-center text-text-primary"
+                          className="!h-[36px] !w-[36px] shrink-0 !p-0 flex items-center justify-center text-text-primary max-md:!h-11 max-md:!w-11"
                           title={playlistPartyActive ? "The party playlist order is fixed" : t("common.shuffle")}
                         >
                           <LuShuffle size={16} />
@@ -1085,7 +1087,7 @@ function LibraryPlaylistContent() {
                             if (search.isOpen) e.preventDefault();
                           }}
                           disabled={currentTracks.length === 0}
-                          className="!h-[36px] !w-[36px] shrink-0 !p-0 flex items-center justify-center text-text-primary"
+                          className="!h-[36px] !w-[36px] shrink-0 !p-0 flex items-center justify-center text-text-primary max-md:!h-11 max-md:!w-11"
                           title={searchButtonLabel}
                         >
                           <Search2Line size={16} />
@@ -1096,7 +1098,7 @@ function LibraryPlaylistContent() {
                             trigger={
                               <Button
                                 variant={hasCustomBg ? "glass-action" : "outline"}
-                                className="!h-[36px] !w-[36px] shrink-0 !p-0 flex items-center justify-center text-text-primary"
+                                className="!h-[36px] !w-[36px] shrink-0 !p-0 flex items-center justify-center text-text-primary max-md:!h-11 max-md:!w-11"
                                 title={t("common.more")}
                               >
                                 <More2Line size={18} />
@@ -1142,7 +1144,7 @@ function LibraryPlaylistContent() {
                         )}
                       </div>
                       {!isLikesMode && socialConfigured && (
-                        <div className="flex flex-col gap-[8px] rounded-lg border border-border-primary/60 bg-bg-panel/50 p-[10px]">
+                        <div className="flex flex-col gap-[8px] rounded-lg border border-border-primary/60 bg-bg-panel/50 p-[10px] max-md:hidden">
                           {linkStatus === "loading" && !linkedPlaylist && (
                             <p className="m-0 text-[11px] text-text-tertiary">Checking playlist collaboration…</p>
                           )}
@@ -1208,6 +1210,72 @@ function LibraryPlaylistContent() {
                           {socialError && <p role="alert" className="m-0 text-[11px] text-red-400">{socialError}</p>}
                         </div>
                       )}
+                      {!isLikesMode && socialConfigured && (
+                        <details className="hidden max-md:block rounded-xl border border-border-primary/60 bg-bg-panel/50 px-3 py-2">
+                          <summary className="min-h-10 cursor-pointer list-none text-[13px] font-medium text-text-primary flex items-center justify-between">
+                            <span>Friends & listening</span>
+                            <span className="text-[11px] text-text-tertiary">
+                              {linkedPlaylist ? `${linkedPlaylist.members.length} members` : "Set up"}
+                            </span>
+                            <span aria-hidden="true" className="text-[15px] text-text-tertiary">⌄</span>
+                          </summary>
+                          <div className="flex flex-col gap-2 pb-1 pt-2">
+                            {linkStatus === "loading" && !linkedPlaylist && (
+                              <p className="m-0 text-[12px] text-text-tertiary">Checking playlist collaboration…</p>
+                            )}
+                            {linkStatus === "unlinked" && !isSharedMode && (
+                              <Button variant="outline" onClick={() => void handleMakeCollaborative()} disabled={socialBusy || !playlistDetail} className="!h-11 w-full !text-[13px]">
+                                {socialBusy ? "Preparing playlist…" : "Make collaborative"}
+                              </Button>
+                            )}
+                            {linkedPlaylist && (
+                              <>
+                                <p className="m-0 text-[12px] text-text-secondary">
+                                  {isSharedMode
+                                    ? `Shared by ${socialPersonName(linkedPlaylist.members.find((member) => member.id === linkedPlaylist.ownerId), currentUser?.id)} · ${linkedPlaylist.members.length} members`
+                                    : `Collaborative playlist · ${linkedPlaylist.members.length} members`}
+                                </p>
+                                {!isSharedMode && linkedPlaylist.ownerId === currentUser?.id && socialFriends.length > 0 && (
+                                  <div className="flex gap-2">
+                                    <Select
+                                      options={socialFriends.map((friend) => ({
+                                        value: friend.id,
+                                        label: `${socialPersonName(friend, currentUser?.id)}${linkedPlaylist.members.some((member) => member.id === friend.id) ? " (invited)" : ""}`,
+                                      }))}
+                                      value={selectedFriendId}
+                                      onChange={setSelectedFriendId}
+                                      aria-label="Choose a friend to invite"
+                                      className="h-11 min-w-0 flex-1 !rounded-xl !px-3 !text-[13px]"
+                                    />
+                                    <Button
+                                      variant="secondary"
+                                      onClick={() => void handleInviteFriend()}
+                                      disabled={socialBusy || !selectedFriendId || linkedPlaylist.members.some((member) => member.id === selectedFriendId)}
+                                      className="!h-11 shrink-0 !px-4 !text-[13px]"
+                                    >Invite</Button>
+                                  </div>
+                                )}
+                                {playlistPartyActive ? (
+                                  <Button variant="secondary" onClick={() => void handleLeavePlaylistParty()} disabled={socialBusy} className="!h-11 w-full !text-[13px]">
+                                    Leave playlist party
+                                  </Button>
+                                ) : (
+                                  <Button variant="outline" onClick={() => void handleStartPlaylistParty()} disabled={socialBusy || Boolean(listeningRoom && !listeningRoom.ended) || linkedPlaylist.members.length < 2 || linkedPlaylist.trackCount === 0} className="!h-11 w-full !text-[13px]">
+                                    {socialBusy ? "Starting party…" : "Start playlist party"}
+                                  </Button>
+                                )}
+                                {currentTrack && (
+                                  <Button variant="outline" onClick={() => void handleAddCurrentTrack()} disabled={socialBusy} className="!h-11 w-full !text-[13px]">
+                                    Add current song
+                                  </Button>
+                                )}
+                                <p className="m-0 text-[11px] leading-relaxed text-text-tertiary">Members can join the playlist party from Friends. Everyone controls playback; its queue is captured when the party starts.</p>
+                              </>
+                            )}
+                            {socialError && <p role="alert" className="m-0 text-[12px] text-red-400">{socialError}</p>}
+                          </div>
+                        </details>
+                      )}
                     </div>
                   }
                 />
@@ -1221,7 +1289,7 @@ function LibraryPlaylistContent() {
                     targetScrollTopRef.current = null;
                   }
                 }}
-                className="min-w-0 flex-1 h-full min-h-0 overflow-y-auto overflow-x-hidden px-[8px] pt-[56px] pb-[24px] overscroll-contain"
+                className="min-w-0 flex-1 h-full min-h-0 overflow-y-auto overflow-x-hidden px-[8px] pt-[56px] pb-[24px] overscroll-contain max-md:px-0 max-md:pt-0 max-md:pb-4"
                 style={{ willChange: "scroll-position" }}
               >
               {currentTracks.length === 0 ? (

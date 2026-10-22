@@ -198,6 +198,21 @@ async function applyControl(room: RoomRuntime, action: any): Promise<void> {
     } else if (action?.type === "seek" && Number.isFinite(action.positionMs)) {
       playerEngine.seek(action.positionMs, false, true);
     }
+    const state = playerEngine.getSnapshot();
+    if (state.currentTrack && room.socket?.readyState === WebSocket.OPEN) {
+      room.socket.send(JSON.stringify({
+        type: "sync",
+        track: state.currentTrack,
+        positionMs: state.positionMs,
+        status: state.status === "paused" ? "paused" : "playing",
+      }));
+      room.lastHostSyncAt = Date.now();
+      room.lastLocal = {
+        trackId: state.currentTrack.id,
+        status: state.status,
+        positionMs: state.positionMs,
+      };
+    }
   } finally {
     window.setTimeout(() => { room.remoteApplying = false; }, 900);
   }
@@ -206,7 +221,6 @@ async function applyControl(room: RoomRuntime, action: any): Promise<void> {
 function observePlayback(room: RoomRuntime): void {
   if (activeRoom !== room || room.remoteApplying || room.pendingPauseTrackId) return;
   const local = usePlayerStore.getState();
-  if (local.status === "loading") return;
   const track = local.currentTrack;
   if (!track) return;
   const now = Date.now();
@@ -215,10 +229,26 @@ function observePlayback(room: RoomRuntime): void {
   const send = (message: unknown) => {
     if (room.socket?.readyState === WebSocket.OPEN) room.socket.send(JSON.stringify(message));
   };
-  if (room.partyType === "playlist" || room.hostId === room.userId) {
+  if (room.partyType === "playlist" && room.hostId !== room.userId) {
+    if (previous) {
+      if (previous.trackId !== current.trackId) {
+        send({ type: "control", action: { type: "play", track } });
+      } else if (current.status === "paused" && previous.status !== "paused") {
+        send({ type: "control", action: { type: "pause" } });
+      } else if (current.status === "playing" && previous.status === "paused") {
+        send({ type: "control", action: { type: "resume" } });
+      } else if (
+        current.status !== "loading" &&
+        previous.status !== "loading" &&
+        Math.abs(previous.positionMs - current.positionMs) > 2500
+      ) {
+        send({ type: "control", action: { type: "seek", positionMs: current.positionMs } });
+      }
+    }
+  } else if (room.partyType === "playlist" || room.hostId === room.userId) {
     const changed = !previous || previous.trackId !== current.trackId || previous.status !== current.status;
     if (changed || now - room.lastHostSyncAt >= 2500) {
-      send({ type: "sync", track, positionMs: local.positionMs, status: local.status === "playing" ? "playing" : "paused" });
+      send({ type: "sync", track, positionMs: local.positionMs, status: local.status === "paused" ? "paused" : "playing" });
       room.lastHostSyncAt = now;
     }
   } else if (room.partyType === "friends" && previous && previous.status !== "loading") {
@@ -227,10 +257,11 @@ function observePlayback(room: RoomRuntime): void {
       const elapsed = room.lastHostState.status === "playing" ? Math.max(0, Date.now() - room.lastHostState.updatedAt) : 0;
       void applyState(room, { ...room.lastHostState, positionMs: room.lastHostState.positionMs + elapsed });
     }
-  } else if (previous && previous.status !== "loading") {
+  } else if (previous) {
     if (previous.trackId !== current.trackId) send({ type: "control", action: { type: "play", track } });
-    else if (previous.status !== current.status) send({ type: "control", action: { type: current.status === "paused" ? "pause" : "resume" } });
-    else if (Math.abs(previous.positionMs - current.positionMs) > 2500) send({ type: "control", action: { type: "seek", positionMs: current.positionMs } });
+    else if (current.status === "paused" && previous.status !== "paused") send({ type: "control", action: { type: "pause" } });
+    else if (current.status === "playing" && previous.status === "paused") send({ type: "control", action: { type: "resume" } });
+    else if (current.status !== "loading" && previous.status !== "loading" && Math.abs(previous.positionMs - current.positionMs) > 2500) send({ type: "control", action: { type: "seek", positionMs: current.positionMs } });
   }
   room.lastLocal = current;
 }

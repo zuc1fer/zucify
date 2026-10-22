@@ -88,7 +88,7 @@ export function useMobileMediaSession(): void {
     void MediaSession.setMetadata({
       title: track.title,
       artist: track.artists,
-      album: track.album?.title,
+      album: track.album?.title || "Zucify",
       artwork: track.coverUrl
         ? [{ src: track.coverUrl, sizes: "512x512", type: "image/jpeg" }]
         : undefined,

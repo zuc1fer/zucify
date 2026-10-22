@@ -36,7 +36,7 @@ export function SettingRow({
   }
 
   return (
-    <div className="flex items-center justify-between gap-[16px] py-[13px]">
+    <div className="flex items-center justify-between gap-[16px] py-[13px] max-md:flex-col max-md:items-stretch max-md:gap-3 max-md:py-4">
       <div className="flex min-w-0 max-w-[360px] flex-col gap-[2px]">
         <span
           className="text-text-primary text-[13px] font-[500] leading-snug"
@@ -53,7 +53,7 @@ export function SettingRow({
           </span>
         ) : null}
       </div>
-      {control ? <div className="shrink-0">{control}</div> : null}
+      {control ? <div className="shrink-0 max-md:flex max-md:w-full max-md:justify-end">{control}</div> : null}
     </div>
   );
 }
@@ -92,7 +92,7 @@ export function SettingBlock({
 
   return (
     <div className="flex flex-col gap-[10px] py-[13px]">
-      <div className="flex min-w-0 max-w-[460px] flex-col gap-[2px]">
+      <div className="flex min-w-0 max-w-[460px] flex-col gap-[2px] max-md:max-w-none">
         <span
           className="text-text-primary text-[13px] font-[500] leading-snug"
           style={font}
@@ -156,7 +156,7 @@ export function SegmentedControl<T extends string>({
     <div
       role={ariaLabel ? "group" : undefined}
       aria-label={ariaLabel}
-      className={`inline-flex w-fit shrink-0 items-center gap-[1px] rounded-lg p-[3px] transition-opacity ${
+      className={`inline-flex w-fit shrink-0 items-center gap-[1px] rounded-lg p-[3px] transition-opacity max-md:w-full ${
         disabled
           ? "bg-border-alpha-10 opacity-50 cursor-not-allowed pointer-events-none"
           : "bg-border-alpha-14"
@@ -171,7 +171,7 @@ export function SegmentedControl<T extends string>({
             disabled={disabled}
             onClick={() => !disabled && onChange(opt.value)}
             aria-pressed={isActive}
-            className={`inline-flex h-[26px] items-center whitespace-nowrap rounded-md border-0 px-[11px] text-[12.5px] leading-none transition-colors ${
+            className={`inline-flex h-[26px] items-center justify-center whitespace-nowrap rounded-md border-0 px-[11px] text-[12.5px] leading-none transition-colors max-md:h-10 max-md:flex-1 max-md:px-2 max-md:text-[13px] ${
               disabled
                 ? isActive
                   ? "bg-bg-primary/50 text-text-tertiary cursor-not-allowed"
