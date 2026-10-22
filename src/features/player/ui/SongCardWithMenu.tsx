@@ -32,6 +32,7 @@ export interface SongCardWithMenuProps {
   onNavigate?: () => void;
   compact?: boolean;
   icon?: React.ReactNode;
+  rightContent?: React.ReactNode;
   showReorderHandle?: boolean;
   onGrabStart?: (e: React.PointerEvent<HTMLDivElement>) => void;
   highlight?: string;
@@ -61,6 +62,7 @@ function SongCardWithMenu({
   onNavigate,
   compact,
   icon,
+  rightContent,
   showReorderHandle,
   onGrabStart,
   highlight,
@@ -175,6 +177,7 @@ function SongCardWithMenu({
       onNavigate={onNavigate}
       compact={compact}
       icon={icon}
+      rightContent={rightContent}
       showReorderHandle={showReorderHandle}
       onGrabStart={onGrabStart}
     />

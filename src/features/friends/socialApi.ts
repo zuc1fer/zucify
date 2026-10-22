@@ -39,6 +39,7 @@ export interface TrackReaction {
 export interface SharedPlaylistTrack {
   id: string;
   addedBy: string;
+  sourceItemId?: string | null;
   addedByUser?: SocialPerson | null;
   createdAt: number;
   track: Track;
@@ -49,6 +50,7 @@ export interface SharedPlaylist {
   id: string;
   ownerId: string;
   title: string;
+  sourcePlaylistId?: string | null;
   createdAt: number;
   trackCount: number;
   members: SocialPerson[];
@@ -147,6 +149,9 @@ export const socialApi = {
   sendPlaylist: (toUserId: string, playlistId: string) => post<SocialMessage>("/api/messages", { toUserId, kind: "playlist", payload: { playlistId } }),
   getPlaylists: () => request<{ items: SharedPlaylist[] }>("/api/playlists").then((result) => result.items),
   createPlaylist: (title: string, memberIds: string[]) => post<{ id: string }>("/api/playlists", { title, memberIds }),
+  getLinkedPlaylist: (sourcePlaylistId: string) => request<SharedPlaylist>(`/api/playlists/source/${encodeURIComponent(sourcePlaylistId)}`),
+  syncExistingPlaylist: (input: { sourcePlaylistId: string; title: string; tracks: { sourceItemId: string; track: Track }[] }) =>
+    post<{ id: string; ownerId: string; sourcePlaylistId: string; title: string }>("/api/playlists/link-existing", input),
   addPlaylistMember: (playlistId: string, memberId: string) => post<{ ok: boolean }>(`/api/playlists/${encodeURIComponent(playlistId)}/members`, { memberId }),
   addTrack: (playlistId: string, track: Track) => post<SharedPlaylistTrack>(`/api/playlists/${encodeURIComponent(playlistId)}/tracks`, { track }),
   setTrackReaction: (playlistId: string, itemId: string, emoji: TrackReactionEmoji, reacted: boolean) =>

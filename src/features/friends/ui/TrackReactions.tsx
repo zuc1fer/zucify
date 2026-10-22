@@ -9,7 +9,7 @@ interface TrackReactionsProps {
 
 export default function TrackReactions({ title, reactions, disabled = false, onReaction }: TrackReactionsProps) {
   return (
-    <div role="group" aria-label={`${title} reactions`} className="flex shrink-0 items-center gap-[3px]">
+    <div role="group" aria-label={`${title} reactions`} onClick={(event) => event.stopPropagation()} className="flex shrink-0 items-center gap-[3px]">
       {TRACK_REACTION_EMOJIS.map((emoji) => {
         const reaction = reactions.find((item) => item.emoji === emoji);
         const count = reaction?.count ?? 0;

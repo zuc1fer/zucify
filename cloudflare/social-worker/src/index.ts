@@ -13,6 +13,7 @@ interface SocialUser {
 
 const ROOM_RECONNECT_GRACE_MS = 60_000;
 const MAX_PLAYLIST_TRACKS = 250;
+const MAX_LINKED_PLAYLIST_TRACKS = 1000;
 const MAX_PLAYLIST_MEMBERS = 25;
 const TRACK_REACTION_EMOJIS = new Set(["❤️", "🔥", "😍", "😂", "👏"]);
 
@@ -199,13 +200,14 @@ async function requests(env: Env, userId: string): Promise<Response> {
   return json({ items: (result.results ?? []).map((row: any) => requestView(row, userId)) });
 }
 
-async function playlists(env: Env, userId: string): Promise<Response> {
+async function playlists(env: Env, userId: string, sourcePlaylistId?: string): Promise<Response> {
   const result = await env.DB.prepare(
-    `SELECT p.id, p.owner_id AS ownerId, p.title, p.created_at AS createdAt,
+    `SELECT p.id, p.owner_id AS ownerId, p.title, p.source_playlist_id AS sourcePlaylistId, p.created_at AS createdAt,
        (SELECT COUNT(*) FROM shared_playlist_tracks t WHERE t.playlist_id = p.id) AS trackCount
      FROM shared_playlists p JOIN shared_playlist_members m ON m.playlist_id = p.id
-     WHERE m.user_id = ? ORDER BY p.created_at DESC LIMIT 100`,
-  ).bind(userId).all();
+     WHERE m.user_id = ? AND (? IS NULL OR p.source_playlist_id = ?)
+     ORDER BY p.created_at DESC LIMIT 100`,
+  ).bind(userId, sourcePlaylistId ?? null, sourcePlaylistId ?? null).all();
   const items = [];
   for (const row of result.results ?? []) {
     const [members, tracks, reactionRows] = await Promise.all([
@@ -215,12 +217,13 @@ async function playlists(env: Env, userId: string): Promise<Response> {
          WHERE m.playlist_id = ? ORDER BY m.added_at`,
       ).bind(row.id).all(),
       env.DB.prepare(
-        `SELECT t.id, t.added_by AS addedBy, t.track_json AS trackJson, t.created_at AS createdAt,
+         `SELECT t.id, t.added_by AS addedBy, t.source_item_id AS sourceItemId,
+           t.track_json AS trackJson, t.created_at AS createdAt,
            adder.id AS addedByUserId, adder.username AS addedByUsername,
            adder.display_name AS addedByDisplayName, adder.avatar_url AS addedByAvatarUrl
          FROM shared_playlist_tracks t LEFT JOIN social_users adder ON adder.id = t.added_by
          WHERE t.playlist_id = ? ORDER BY t.position, t.created_at LIMIT ?`,
-      ).bind(row.id, MAX_PLAYLIST_TRACKS).all(),
+      ).bind(row.id, row.sourcePlaylistId ? MAX_LINKED_PLAYLIST_TRACKS : MAX_PLAYLIST_TRACKS).all(),
       env.DB.prepare(
         `SELECT track_id AS trackId, emoji, COUNT(*) AS count,
            MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) AS reactedByMe
@@ -237,7 +240,8 @@ async function playlists(env: Env, userId: string): Promise<Response> {
       ...row,
       members: members.results ?? [],
       tracks: (tracks.results ?? []).map((track: any) => ({
-        id: track.id, addedBy: track.addedBy, createdAt: track.createdAt, track: safeParse(track.trackJson),
+        id: track.id, addedBy: track.addedBy, sourceItemId: track.sourceItemId,
+        createdAt: track.createdAt, track: safeParse(track.trackJson),
         addedByUser: track.addedByUserId ? {
           id: track.addedByUserId,
           username: track.addedByUsername,
@@ -273,6 +277,89 @@ async function listeningSessions(env: Env, userId: string): Promise<Response> {
   })) });
 }
 
+async function linkExistingPlaylist(env: Env, user: SocialUser, body: any): Promise<Response> {
+  const sourcePlaylistId = string(body?.sourcePlaylistId, 300);
+  const title = string(body?.title, 100);
+  if (!sourcePlaylistId || !title || !Array.isArray(body?.tracks)) {
+    return error("Choose an existing playlist to share.");
+  }
+  if (body.tracks.length > MAX_LINKED_PLAYLIST_TRACKS) {
+    return error(`An existing playlist can have up to ${MAX_LINKED_PLAYLIST_TRACKS} songs.`, 413);
+  }
+
+  const tracks: { sourceItemId: string; track: Record<string, unknown> }[] = [];
+  const sourceItemIds = new Set<string>();
+  for (const item of body.tracks) {
+    const sourceItemId = string(item?.sourceItemId, 300);
+    const track = parseTrack(item?.track);
+    if (!sourceItemId || !track || sourceItemIds.has(sourceItemId)) {
+      return error("The playlist contains an invalid or duplicate song.");
+    }
+    sourceItemIds.add(sourceItemId);
+    tracks.push({ sourceItemId, track });
+  }
+
+  const existing = await env.DB.prepare(
+    "SELECT id, owner_id AS ownerId FROM shared_playlists WHERE source_playlist_id = ?",
+  ).bind(sourcePlaylistId).first();
+  if (existing && existing.ownerId !== user.id) {
+    return error("Only the playlist owner can sync this collaboration.", 403);
+  }
+
+  const now = Date.now();
+  const playlistId = existing?.id ?? crypto.randomUUID();
+  if (existing) {
+    await env.DB.prepare("UPDATE shared_playlists SET title = ? WHERE id = ?")
+      .bind(title, playlistId).run();
+  } else {
+    await env.DB.prepare(
+      "INSERT INTO shared_playlists (id, owner_id, title, created_at, source_playlist_id) VALUES (?, ?, ?, ?, ?)",
+    ).bind(playlistId, user.id, title, now, sourcePlaylistId).run();
+    await env.DB.prepare(
+      "INSERT INTO shared_playlist_members (playlist_id, user_id, added_at) VALUES (?, ?, ?)",
+    ).bind(playlistId, user.id, now).run();
+  }
+
+  const oldSourceRows = await env.DB.prepare(
+    "SELECT id, source_item_id AS sourceItemId FROM shared_playlist_tracks WHERE playlist_id = ? AND source_item_id IS NOT NULL",
+  ).bind(playlistId).all();
+  const staleIds = (oldSourceRows.results ?? [])
+    .filter((row: any) => !sourceItemIds.has(row.sourceItemId))
+    .map((row: any) => row.id as string);
+  for (let offset = 0; offset < staleIds.length; offset += 100) {
+    const batch = staleIds.slice(offset, offset + 100).map((id) => env.DB.prepare(
+      "DELETE FROM shared_playlist_tracks WHERE id = ? AND playlist_id = ?",
+    ).bind(id, playlistId));
+    await env.DB.batch(batch);
+  }
+
+  for (let offset = 0; offset < tracks.length; offset += 100) {
+    const batch = tracks.slice(offset, offset + 100).map(({ sourceItemId, track }, index) => {
+      const position = (offset + index) * 2;
+      return env.DB.prepare(
+        `INSERT INTO shared_playlist_tracks
+         (id, playlist_id, added_by, position, track_json, created_at, source_item_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(playlist_id, source_item_id) DO UPDATE SET
+           position = excluded.position, track_json = excluded.track_json`,
+      ).bind(crypto.randomUUID(), playlistId, user.id, position, JSON.stringify(track), now, sourceItemId);
+    });
+    if (batch.length) await env.DB.batch(batch);
+  }
+
+  const addedRows = await env.DB.prepare(
+    "SELECT id FROM shared_playlist_tracks WHERE playlist_id = ? AND source_item_id IS NULL ORDER BY position, created_at",
+  ).bind(playlistId).all();
+  const reorderAddedRows = (addedRows.results ?? []).map((row: any, index: number) => env.DB.prepare(
+    "UPDATE shared_playlist_tracks SET position = ? WHERE id = ? AND playlist_id = ?",
+  ).bind((tracks.length + index) * 2, row.id, playlistId));
+  for (let offset = 0; offset < reorderAddedRows.length; offset += 100) {
+    await env.DB.batch(reorderAddedRows.slice(offset, offset + 100));
+  }
+
+  return json({ id: playlistId, ownerId: user.id, sourcePlaylistId, title }, existing ? 200 : 201);
+}
+
 async function handleApi(request: Request, env: Env, user: SocialUser): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, "") || "/";
@@ -292,6 +379,14 @@ async function handleApi(request: Request, env: Env, user: SocialUser): Promise<
   if (method === "GET" && path === "/api/people") return searchPeople(env, user.id, url.searchParams.get("q"));
   if (method === "GET" && path === "/api/requests") return requests(env, user.id);
   if (method === "GET" && path === "/api/playlists") return playlists(env, user.id);
+  const linkedPlaylistPath = path.match(/^\/api\/playlists\/source\/([^/]+)$/);
+  if (method === "GET" && linkedPlaylistPath) {
+    const sourcePlaylistId = decodeURIComponent(linkedPlaylistPath[1]);
+    const response = await playlists(env, user.id, sourcePlaylistId);
+    const result = await response.json() as { items?: unknown[] };
+    const playlist = result.items?.[0];
+    return playlist ? json(playlist) : error("That collaborative playlist was not found.", 404);
+  }
   if (method === "GET" && path === "/api/sessions") return listeningSessions(env, user.id);
 
   if (method === "POST" && path === "/api/requests") {
@@ -427,6 +522,11 @@ async function handleApi(request: Request, env: Env, user: SocialUser): Promise<
     return json({ id, ownerId: user.id, title, createdAt: now }, 201);
   }
 
+  if (method === "POST" && path === "/api/playlists/link-existing") {
+    const body = await request.json().catch(() => null) as any;
+    return linkExistingPlaylist(env, user, body);
+  }
+
   const playlistMembersPath = path.match(/^\/api\/playlists\/([^/]+)\/members$/);
   if (method === "POST" && playlistMembersPath) {
     const playlistId = decodeURIComponent(playlistMembersPath[1]);
@@ -457,9 +557,12 @@ async function handleApi(request: Request, env: Env, user: SocialUser): Promise<
     const body = await request.json().catch(() => null) as any;
     const track = parseTrack(body?.track);
     if (!track) return error("Choose a valid song.");
+    const playlist = await env.DB.prepare("SELECT source_playlist_id AS sourcePlaylistId FROM shared_playlists WHERE id=?")
+      .bind(playlistId).first();
+    const maxTracks = playlist?.sourcePlaylistId ? MAX_LINKED_PLAYLIST_TRACKS : MAX_PLAYLIST_TRACKS;
     const count = await env.DB.prepare("SELECT COUNT(*) AS count FROM shared_playlist_tracks WHERE playlist_id=?")
       .bind(playlistId).first();
-    if (Number(count?.count ?? 0) >= MAX_PLAYLIST_TRACKS) return error(`A shared playlist can have up to ${MAX_PLAYLIST_TRACKS} songs.`, 409);
+    if (Number(count?.count ?? 0) >= maxTracks) return error(`A shared playlist can have up to ${maxTracks} songs.`, 409);
     const last = await env.DB.prepare("SELECT COALESCE(MAX(position), -1) AS position FROM shared_playlist_tracks WHERE playlist_id=?").bind(playlistId).first();
     const id = crypto.randomUUID();
     const now = Date.now();
@@ -517,6 +620,10 @@ async function handleApi(request: Request, env: Env, user: SocialUser): Promise<
     const itemId = decodeURIComponent(deleteTrackPath[2]);
     const denied = await requirePlaylistMember(env, playlistId, user.id);
     if (denied) return denied;
+    const sourceTrack = await env.DB.prepare(
+      "SELECT source_item_id AS sourceItemId FROM shared_playlist_tracks WHERE id=? AND playlist_id=?",
+    ).bind(itemId, playlistId).first();
+    if (sourceTrack?.sourceItemId) return error("Remove this song from the original playlist to update the collaboration.", 409);
     await env.DB.prepare("DELETE FROM shared_playlist_tracks WHERE id=? AND playlist_id=?").bind(itemId, playlistId).run();
     return json({ ok: true });
   }

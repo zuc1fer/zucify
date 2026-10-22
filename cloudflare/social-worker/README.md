@@ -2,6 +2,8 @@
 
 This Cloudflare Worker stores friend requests, messages, shared playlists, per-song reactions, and listening-room state. Shared playlist tracks show who added them. Music and Liner accounts remain on the existing Liner API. The Worker checks each request's Liner access token with `/v1/me`; it does not store access or refresh tokens. People become searchable after opening Friends in Zucify once, which registers their public profile in the social directory. Accepted friends can message each other, and playlist access is limited to playlist members.
 
+An existing Liner playlist can be made collaborative from its playlist page. The Worker stores a linked snapshot keyed by the original playlist ID, so songs friends add, their attribution, and reactions show in that same Zucify view. The original playlist continues to belong to its Liner owner; songs added by friends are stored in this Worker collaboration layer and are not written into Liner automatically. The owner can invite accepted friends from the playlist sidebar. Linked playlists support up to 1,000 tracks.
+
 ## Deploy to your Cloudflare account
 
 Wrangler must be logged in (`pnpm dlx wrangler login` if needed).

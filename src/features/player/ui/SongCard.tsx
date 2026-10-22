@@ -35,6 +35,7 @@ export interface SongCardProps {
   onNavigate?: () => void;
   compact?: boolean;
   icon?: React.ReactNode;
+  rightContent?: React.ReactNode;
   showReorderHandle?: boolean;
   onGrabStart?: (e: React.PointerEvent<HTMLDivElement>) => void;
   /** search query whose matches get marked in the title */
@@ -65,6 +66,7 @@ function SongCard({
   onNavigate,
   compact = false,
   icon,
+  rightContent,
   showReorderHandle,
   onGrabStart,
   highlight,
@@ -229,7 +231,8 @@ function SongCard({
         </div>
       </div>
 
-      <div className="flex items-center shrink-0 ml-[16px] gap-[16px]">
+      <div className="flex items-center shrink-0 ml-[16px] gap-[10px]">
+        {rightContent}
         {releaseDate && (
           <span
             className="text-[14px] text-text-tertiary"

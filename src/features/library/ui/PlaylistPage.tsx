@@ -35,6 +35,16 @@ import type { Track } from "@/shared/types";
 import { useTranslation } from "@/languages";
 import { api } from "@/shared/api";
 import { useIsContentTransparent } from "@/features/settings/store/customizationStore";
+import { useAuthStore } from "@/features/auth";
+import TrackReactions from "@/features/friends/ui/TrackReactions";
+import {
+  isSocialApiConfigured,
+  socialApi,
+  type SharedPlaylist,
+  type SharedPlaylistTrack,
+  type SocialPerson,
+  type TrackReactionEmoji,
+} from "@/features/friends/socialApi";
 import {
   useTrackSearch,
   useTrackSearchButtonLabel,
@@ -52,6 +62,11 @@ interface TrackItemProps {
   showReorderHandle?: boolean;
   onGrabStart?: (e: React.PointerEvent<HTMLDivElement>) => void;
   highlight?: string;
+  socialTrack?: SharedPlaylistTrack;
+  addedByName?: string;
+  isSocialAdded?: boolean;
+  reactionDisabled?: boolean;
+  onReaction?: (item: SharedPlaylistTrack, emoji: TrackReactionEmoji, reacted: boolean) => void;
 }
 
 const TrackItem = memo(function TrackItem({
@@ -64,6 +79,11 @@ const TrackItem = memo(function TrackItem({
   showReorderHandle,
   onGrabStart,
   highlight,
+  socialTrack,
+  addedByName,
+  isSocialAdded = false,
+  reactionDisabled = false,
+  onReaction,
 }: TrackItemProps) {
   const handlePlay = useCallback(() => {
     if (typeof window !== "undefined" && window.__linerWasDragging) return;
@@ -85,8 +105,8 @@ const TrackItem = memo(function TrackItem({
         artistId={track.artistId}
         artistList={track.artistList}
         coverUrl={track.coverUrl || playlistCoverUrl}
-        playlistId={playlistId}
-        playlistItemId={track.playlistItemId}
+        playlistId={isSocialAdded ? undefined : playlistId}
+        playlistItemId={isSocialAdded ? undefined : track.playlistItemId}
         playlistTitle={playlistTitle}
         showReorderHandle={showReorderHandle}
         onGrabStart={onGrabStart}
@@ -100,11 +120,38 @@ const TrackItem = memo(function TrackItem({
         }
         durationMs={track.durationMs}
         explicit={track.explicit}
+        rightContent={socialTrack ? (
+          <div
+            className="flex flex-col items-end justify-center gap-[1px]"
+            data-prevent-drag
+            onClick={(event) => event.stopPropagation()}
+          >
+            <span className="max-w-[140px] truncate text-[10px] leading-none text-text-tertiary">
+              Added by {addedByName || "a friend"}
+            </span>
+            <TrackReactions
+              title={track.title}
+              reactions={socialTrack.reactions ?? []}
+              disabled={reactionDisabled}
+              onReaction={(emoji, reacted) => onReaction?.(socialTrack, emoji, reacted)}
+            />
+          </div>
+        ) : undefined}
         onPlay={handlePlay}
       />
     </div>
   );
 });
+
+function getSourceItemId(track: Track, index: number): string {
+  return track.playlistItemId || `${track.id}:${index}`;
+}
+
+function socialPersonName(person?: SocialPerson | null, currentUserId?: string): string {
+  if (!person) return "a friend";
+  if (person.id === currentUserId) return "you";
+  return person.displayName || person.username || "a friend";
+}
 
 function LibraryPlaylistContent() {
   const navigate = useNavigate();
@@ -131,6 +178,16 @@ function LibraryPlaylistContent() {
   const { data: likesData, isLoading: likesLoading } = useLikedTracks(
     isLikesMode ? { limit: 1000, offset: 0 } : undefined,
   );
+
+  const currentUser = useAuthStore((state) => state.user);
+  const socialConfigured = isSocialApiConfigured();
+  const [linkedPlaylist, setLinkedPlaylist] = useState<SharedPlaylist | null>(null);
+  const [linkStatus, setLinkStatus] = useState<"loading" | "unlinked" | "linked" | "error" | "unconfigured">("loading");
+  const [socialFriends, setSocialFriends] = useState<SocialPerson[]>([]);
+  const [selectedFriendId, setSelectedFriendId] = useState("");
+  const [socialBusy, setSocialBusy] = useState(false);
+  const [socialError, setSocialError] = useState("");
+  const lastSyncedSourceRef = useRef("");
 
   const isLoading = isLikesMode ? likesLoading : playlistLoading;
 
@@ -167,6 +224,50 @@ function LibraryPlaylistContent() {
   })();
 
   useEffect(() => {
+    if (!socialConfigured) {
+      setLinkedPlaylist(null);
+      setLinkStatus("unconfigured");
+      return;
+    }
+    if (isLikesMode || !decodedId) {
+      setLinkedPlaylist(null);
+      setLinkStatus("unlinked");
+      return;
+    }
+
+    let active = true;
+    const refreshLinkedPlaylist = async () => {
+      try {
+        const playlist = await socialApi.getLinkedPlaylist(decodedId);
+        if (!active) return;
+        setLinkedPlaylist(playlist);
+        setLinkStatus("linked");
+        setSocialError("");
+      } catch (error) {
+        if (!active) return;
+        if ((error as { status?: number })?.status === 404) {
+          setLinkedPlaylist(null);
+          setLinkStatus("unlinked");
+          setSocialError("");
+        } else {
+          setLinkStatus((current) => current === "linked" ? current : "error");
+          setSocialError(error instanceof Error ? error.message : "Could not load playlist collaboration.");
+        }
+      }
+    };
+
+    setLinkStatus("loading");
+    void refreshLinkedPlaylist();
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshLinkedPlaylist();
+    }, 15_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [decodedId, isLikesMode, socialConfigured]);
+
+  useEffect(() => {
     if (isEditingTitle && titleRef.current) {
       titleRef.current.focus();
       const selection = window.getSelection();
@@ -197,9 +298,66 @@ function LibraryPlaylistContent() {
     setOptimisticTracks(null);
   }, [viewData?.revision, decodedId]);
 
-  const currentTracks = useMemo(() => {
+  const baseTracks = useMemo(() => {
     return optimisticTracks ?? viewData?.tracks ?? [];
   }, [optimisticTracks, viewData?.tracks]);
+
+  const sourceTracks = useMemo(
+    () => (playlistDetail?.tracks ?? []).map((track, index) => ({
+      sourceItemId: getSourceItemId(track, index),
+      track,
+    })),
+    [playlistDetail?.tracks],
+  );
+  const sourceSignature = useMemo(
+    () => `${decodedId ?? ""}:${playlistDetail?.revision ?? ""}:${viewData?.title ?? ""}:${JSON.stringify(sourceTracks)}`,
+    [decodedId, playlistDetail?.revision, sourceTracks, viewData?.title],
+  );
+  const linkedAddedTracks = useMemo(
+    () => isLikesMode ? [] : (linkedPlaylist?.tracks ?? []).filter((item) => !item.sourceItemId),
+    [isLikesMode, linkedPlaylist?.tracks],
+  );
+  const currentTracks = useMemo(() => [
+    ...baseTracks,
+    ...linkedAddedTracks.map((item) => ({ ...item.track, playlistItemId: `zucify:${item.id}` })),
+  ], [baseTracks, linkedAddedTracks]);
+  const socialTrackByRowKey = useMemo(() => {
+    const byKey = new Map<string, SharedPlaylistTrack>();
+    for (const item of linkedPlaylist?.tracks ?? []) {
+      byKey.set(item.sourceItemId ? `source:${item.sourceItemId}` : `zucify:${item.id}`, item);
+    }
+    return byKey;
+  }, [linkedPlaylist?.tracks]);
+
+  useEffect(() => {
+    if (!linkedPlaylist || !decodedId || !playlistDetail || isLikesMode || !sourceSignature) return;
+    if (lastSyncedSourceRef.current === sourceSignature) return;
+    lastSyncedSourceRef.current = sourceSignature;
+    void socialApi.syncExistingPlaylist({
+      sourcePlaylistId: decodedId,
+      title: viewData?.title ?? linkedPlaylist.title,
+      tracks: sourceTracks,
+    }).then(() => socialApi.getLinkedPlaylist(decodedId)).then(setLinkedPlaylist).catch((error) => {
+      lastSyncedSourceRef.current = "";
+      setSocialError(error instanceof Error ? error.message : "Could not sync the original playlist.");
+    });
+  }, [decodedId, isLikesMode, linkedPlaylist?.id, playlistDetail, sourceSignature, sourceTracks, viewData?.title]);
+
+  useEffect(() => {
+    if (!linkedPlaylist) {
+      setSocialFriends([]);
+      return;
+    }
+    let active = true;
+    void socialApi.getFriends().then((items) => {
+      if (!active) return;
+      setSocialFriends(items);
+      setSelectedFriendId((current) => items.some((person) => person.id === current) ? current : (items[0]?.id ?? ""));
+    }).catch((error) => {
+      if (active) setSocialError(error instanceof Error ? error.message : "Could not load your friends.");
+    });
+    return () => { active = false; };
+  }, [linkedPlaylist?.id]);
 
   const search = useTrackSearch(currentTracks, id);
   const searchButtonLabel = useTrackSearchButtonLabel();
@@ -247,6 +405,64 @@ function LibraryPlaylistContent() {
   const { toast } = useToast();
   const [addedToQueue, setAddedToQueue] = useState(false);
 
+  const handleMakeCollaborative = useCallback(async () => {
+    if (!decodedId || !playlistDetail || !viewData || socialBusy) return;
+    setSocialBusy(true);
+    setSocialError("");
+    try {
+      await socialApi.syncExistingPlaylist({
+        sourcePlaylistId: decodedId,
+        title: viewData.title,
+        tracks: sourceTracks,
+      });
+      lastSyncedSourceRef.current = sourceSignature;
+      const playlist = await socialApi.getLinkedPlaylist(decodedId);
+      setLinkedPlaylist(playlist);
+      setLinkStatus("linked");
+      toast("Playlist is ready to collaborate.", "checkmark", { description: viewData.title });
+    } catch (error) {
+      setSocialError(error instanceof Error ? error.message : "Could not make this playlist collaborative.");
+    } finally {
+      setSocialBusy(false);
+    }
+  }, [decodedId, lastSyncedSourceRef, playlistDetail, socialBusy, sourceSignature, sourceTracks, toast, viewData]);
+
+  const handleInviteFriend = useCallback(async () => {
+    if (!linkedPlaylist || !selectedFriendId || socialBusy) return;
+    setSocialBusy(true);
+    setSocialError("");
+    try {
+      await socialApi.addPlaylistMember(linkedPlaylist.id, selectedFriendId);
+      setLinkedPlaylist(await socialApi.getLinkedPlaylist(decodedId!));
+      toast("Friend added to the playlist.", "checkmark");
+    } catch (error) {
+      setSocialError(error instanceof Error ? error.message : "Could not invite this friend.");
+    } finally {
+      setSocialBusy(false);
+    }
+  }, [decodedId, linkedPlaylist, selectedFriendId, socialBusy, toast]);
+
+  const handleTrackReaction = useCallback(async (
+    item: SharedPlaylistTrack,
+    emoji: TrackReactionEmoji,
+    reacted: boolean,
+  ) => {
+    if (!linkedPlaylist || socialBusy) return;
+    setSocialBusy(true);
+    setSocialError("");
+    try {
+      const result = await socialApi.setTrackReaction(linkedPlaylist.id, item.id, emoji, reacted);
+      setLinkedPlaylist((current) => current ? {
+        ...current,
+        tracks: current.tracks.map((track) => track.id === item.id ? { ...track, reactions: result.reactions } : track),
+      } : current);
+    } catch (error) {
+      setSocialError(error instanceof Error ? error.message : "Could not update that reaction.");
+    } finally {
+      setSocialBusy(false);
+    }
+  }, [linkedPlaylist, socialBusy]);
+
   const handleAddToQueue = useCallback(() => {
     if (!currentTracks.length || !viewData) return;
     for (const track of currentTracks) {
@@ -275,7 +491,7 @@ function LibraryPlaylistContent() {
 
   const handleReorderCommit = useCallback(
     (fromIndex: number, toIndex: number, movingTrack: Track) => {
-      if (!decodedId || !viewData || isLikesMode) return;
+      if (!decodedId || !viewData || isLikesMode || linkedPlaylist) return;
       if (fromIndex === toIndex || !movingTrack.playlistItemId) return;
 
       const nextList = [...currentTracks];
@@ -294,7 +510,7 @@ function LibraryPlaylistContent() {
         revision: viewData.revision,
       });
     },
-    [currentTracks, decodedId, isLikesMode, reorderTracks, viewData],
+    [currentTracks, decodedId, isLikesMode, linkedPlaylist, reorderTracks, viewData],
   );
 
   const {
@@ -674,14 +890,14 @@ function LibraryPlaylistContent() {
                         }`}
                       >
                         <MusicLine size={13} className={hasCustomBg ? "text-white shrink-0" : "text-text-tertiary shrink-0"} />
-                        <span>{viewData.countLabel}</span>
+                        <span>{t("common.tracks", { count: currentTracks.length })}</span>
                         <span
                           className={`w-[3px] h-[3px] rounded-full shrink-0 ${hasCustomBg ? "bg-white/50" : "bg-text-tertiary/40"}`}
                           aria-hidden
                         />
                         <span>
                           {(() => {
-                            const totalMs = viewData.tracks.reduce(
+                            const totalMs = currentTracks.reduce(
                               (acc, t) => acc + (t.durationMs || 0),
                               0,
                             );
@@ -821,6 +1037,51 @@ function LibraryPlaylistContent() {
                           />
                         )}
                       </div>
+                      {!isLikesMode && socialConfigured && (
+                        <div className="flex flex-col gap-[8px] rounded-lg border border-border-primary/60 bg-bg-panel/50 p-[10px]">
+                          {linkStatus === "loading" && !linkedPlaylist && (
+                            <p className="m-0 text-[11px] text-text-tertiary">Checking playlist collaboration…</p>
+                          )}
+                          {linkStatus === "unlinked" && (
+                            <Button variant="outline" onClick={() => void handleMakeCollaborative()} disabled={socialBusy || !playlistDetail} className="!h-[34px] w-full !text-[12px]">
+                              {socialBusy ? "Preparing playlist…" : "Make collaborative"}
+                            </Button>
+                          )}
+                          {linkedPlaylist && (
+                            <>
+                              <p className="m-0 text-[12px] font-medium text-text-primary">
+                                Collaborative · {linkedPlaylist.members.length} member{linkedPlaylist.members.length === 1 ? "" : "s"}
+                              </p>
+                              {socialFriends.length > 0 ? (
+                                <div className="flex gap-[6px]">
+                                  <select
+                                    value={selectedFriendId}
+                                    onChange={(event) => setSelectedFriendId(event.target.value)}
+                                    aria-label="Choose a friend to invite"
+                                    className="h-[34px] min-w-0 flex-1 rounded-md border border-border-primary bg-bg-primary px-[8px] text-[11px] text-text-primary"
+                                  >
+                                    {socialFriends.map((friend) => (
+                                      <option key={friend.id} value={friend.id}>
+                                        {socialPersonName(friend, currentUser?.id)}{linkedPlaylist.members.some((member) => member.id === friend.id) ? " (invited)" : ""}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <Button
+                                    variant="secondary"
+                                    onClick={() => void handleInviteFriend()}
+                                    disabled={socialBusy || !selectedFriendId || linkedPlaylist.members.some((member) => member.id === selectedFriendId)}
+                                    className="!h-[34px] shrink-0 !px-[9px] !text-[11px]"
+                                  >Invite</Button>
+                                </div>
+                              ) : (
+                                <p className="m-0 text-[11px] text-text-tertiary">Add friends in Friends to invite them here.</p>
+                              )}
+                              <p className="m-0 text-[10px] leading-[1.4] text-text-tertiary">Friend-added songs play here; your Liner playlist stays owner-managed.</p>
+                            </>
+                          )}
+                          {socialError && <p role="alert" className="m-0 text-[11px] text-red-400">{socialError}</p>}
+                        </div>
+                      )}
                     </div>
                   }
                 />
@@ -902,8 +1163,17 @@ function LibraryPlaylistContent() {
                   }
 
                   // reordering a filtered view would be ambiguous, so it waits for the full list
+                  const rowKey = track.playlistItemId?.startsWith("zucify:")
+                    ? track.playlistItemId
+                    : `source:${getSourceItemId(track, index)}`;
+                  const socialTrack = socialTrackByRowKey.get(rowKey);
+                  const isSocialAdded = Boolean(socialTrack && !socialTrack.sourceItemId);
+                  const addedByName = socialPersonName(
+                    socialTrack?.addedByUser ?? linkedPlaylist?.members.find((member) => member.id === socialTrack?.addedBy),
+                    currentUser?.id,
+                  );
                   const canReorder = Boolean(
-                    !isLikesMode && decodedId && track.playlistItemId && !isFiltering,
+                    !isLikesMode && !linkedPlaylist && decodedId && track.playlistItemId && !isFiltering,
                   );
 
                   return (
@@ -917,6 +1187,11 @@ function LibraryPlaylistContent() {
                       playlistCoverUrl={viewData.coverUrl}
                       allTracks={currentTracks}
                       showReorderHandle={canReorder}
+                      socialTrack={socialTrack}
+                      addedByName={addedByName}
+                      isSocialAdded={isSocialAdded}
+                      reactionDisabled={socialBusy}
+                      onReaction={handleTrackReaction}
                       highlight={search.activeQuery || undefined}
                       onGrabStart={
                         canReorder && !isDragging
