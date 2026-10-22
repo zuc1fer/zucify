@@ -2,11 +2,27 @@ import { memo, useCallback, useMemo, useState } from "react";
 import SongCard from "./SongCard";
 import { useSongMenuItems } from "../hooks/useSongMenuItems";
 import { playerEngine } from "../engine/playerEngine";
-import { usePlayerStore } from "../store/playerStore";
+import { usePlayerStore, type AccentVariant } from "../store/playerStore";
 import { useToast } from "@/shared/ui";
 import { useTranslation } from "@/languages";
 
 import type { TrackArtist } from "@/shared/types";
+
+const BRANDING_ACCENTS: Record<AccentVariant, string> = {
+  default: "var(--accent-primary)",
+  spotify: "#1DB954",
+  discord: "#5865F2",
+  telegram: "#0088CC",
+  aurora: "#a855f7",
+  sunset: "#fb923c",
+  ocean: "#2563eb",
+  forest: "#059669",
+  berry: "#db2777",
+  carbon: "var(--text-primary)",
+  pixel: "var(--text-primary)",
+  scanlines: "var(--text-primary)",
+  vhs: "#ff00ff",
+};
 
 export interface SongCardWithMenuProps {
   id?: string;
@@ -105,6 +121,13 @@ function SongCardWithMenu({
   const trackDoubleClickBehavior = usePlayerStore(
     (state) => state.trackDoubleClickBehavior,
   );
+  const currentTrackId = usePlayerStore((state) => state.currentTrack?.id);
+  const playbackStatus = usePlayerStore((state) => state.status);
+  const accentVariant = usePlayerStore((state) => state.accentVariant);
+  const isCurrentTrack = Boolean(
+    id && id === currentTrackId && ["playing", "paused", "loading"].includes(playbackStatus),
+  );
+  const isPlaying = isCurrentTrack && playbackStatus === "playing";
 
   const handleDoubleClick = useCallback(() => {
     if (!id) return;
@@ -154,6 +177,9 @@ function SongCardWithMenu({
   return (
     <SongCard
       id={id}
+      isCurrentTrack={isCurrentTrack}
+      isPlaying={isPlaying}
+      playbackAccent={BRANDING_ACCENTS[accentVariant]}
       title={title}
       highlight={highlight}
       artists={artists}

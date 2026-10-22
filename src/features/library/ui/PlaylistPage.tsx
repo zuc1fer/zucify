@@ -20,6 +20,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { LuPencil, LuTrash2, LuText, LuShuffle } from "react-icons/lu";
 import { buildShareUrl } from "@/shared/utils/share";
 import Button from "@/shared/ui/Button";
+import Select from "@/shared/ui/Select";
 import DropdownMenu from "@/shared/ui/DropdownMenu";
 import SongCardWithMenu from "@/features/player/ui/SongCardWithMenu";
 import CoverImage from "@/features/covers/ui/CoverImage";
@@ -1159,18 +1160,16 @@ function LibraryPlaylistContent() {
                               </p>
                               {!isSharedMode && linkedPlaylist.ownerId === currentUser?.id && socialFriends.length > 0 ? (
                                 <div className="flex gap-[6px]">
-                                  <select
+                                  <Select
+                                    options={socialFriends.map((friend) => ({
+                                      value: friend.id,
+                                      label: `${socialPersonName(friend, currentUser?.id)}${linkedPlaylist.members.some((member) => member.id === friend.id) ? " (invited)" : ""}`,
+                                    }))}
                                     value={selectedFriendId}
-                                    onChange={(event) => setSelectedFriendId(event.target.value)}
+                                    onChange={setSelectedFriendId}
                                     aria-label="Choose a friend to invite"
-                                    className="h-[34px] min-w-0 flex-1 rounded-md border border-border-primary bg-bg-primary px-[8px] text-[11px] text-text-primary"
-                                  >
-                                    {socialFriends.map((friend) => (
-                                      <option key={friend.id} value={friend.id}>
-                                        {socialPersonName(friend, currentUser?.id)}{linkedPlaylist.members.some((member) => member.id === friend.id) ? " (invited)" : ""}
-                                      </option>
-                                    ))}
-                                  </select>
+                                    className="h-[34px] min-w-0 flex-1 !rounded-[10px] !px-[9px] !text-[11px]"
+                                  />
                                   <Button
                                     variant="secondary"
                                     onClick={() => void handleInviteFriend()}

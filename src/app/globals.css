@@ -337,6 +337,57 @@ button.apple-glass-action:hover,
   }
 }
 
+@keyframes song-playing-bars {
+  0%, 100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.song-playing-indicator {
+  display: inline-flex;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+}
+
+.song-playing-indicator > span {
+  width: 2px;
+  border-radius: 9999px;
+  background: currentColor;
+  transform: scaleY(0.55);
+  transform-origin: center bottom;
+}
+
+.song-playing-indicator > span:nth-child(1) {
+  height: 6px;
+}
+
+.song-playing-indicator > span:nth-child(2) {
+  height: 11px;
+}
+
+.song-playing-indicator > span:nth-child(3) {
+  height: 8px;
+}
+
+.song-playing-indicator--playing > span {
+  animation: song-playing-bars 780ms ease-in-out infinite;
+}
+
+.song-playing-indicator--playing > span:nth-child(2) {
+  animation-delay: -260ms;
+}
+
+.song-playing-indicator--playing > span:nth-child(3) {
+  animation-delay: -480ms;
+}
+
 .lyric-dot-anim {
   animation: lyric-dot 0.8s ease-in-out infinite;
 }
@@ -421,6 +472,10 @@ button.apple-glass-action:hover,
   .lyric-dot-anim {
     animation: none;
     opacity: 0.5;
+  }
+  .song-playing-indicator--playing > span {
+    animation: none;
+    transform: scaleY(0.65);
   }
   .skeleton-shimmer {
     animation: none;

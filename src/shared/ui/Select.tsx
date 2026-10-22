@@ -29,7 +29,7 @@ const ChevronIcon = ({ open }: { open: boolean }) => (
     viewBox="0 0 12 12"
     fill="none"
     aria-hidden="true"
-    className={`shrink-0 text-text-tertiary transition-transform duration-150 ${open ? "rotate-180" : ""}`}
+    className={`shrink-0 transition-[color,transform] duration-150 ${open ? "rotate-180 text-accent-primary" : "text-text-tertiary"}`}
   >
     <path
       d="M2.5 4.5L6 8L9.5 4.5"
@@ -48,7 +48,7 @@ const CheckIcon = () => (
     viewBox="0 0 12 12"
     fill="none"
     aria-hidden="true"
-    className="shrink-0 text-text-primary"
+    className="shrink-0 text-accent-primary"
   >
     <path
       d="M2 6.5L4.5 9L10 3"
@@ -210,8 +210,12 @@ export function Select<T extends string = string>({
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className={`inline-flex h-[36px] items-center justify-between gap-[8px] rounded-md border ${borderClass} ${bgClass} px-[12px] text-[13px] font-[400] text-text-primary transition-colors ${hoverClass} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-text-primary/70 focus-visible:ring-offset-1 focus-visible:ring-offset-bg-primary disabled:pointer-events-none disabled:opacity-50 cursor-pointer ${className}`.trim()}
-        style={{ fontFamily: "var(--font-inter), sans-serif" }}
+        className={`inline-flex h-[40px] items-center justify-between gap-[9px] rounded-[11px] border ${borderClass} ${bgClass} px-[12px] text-[13px] font-[400] text-text-primary transition-[background-color,border-color,box-shadow] duration-150 ${hoverClass} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/45 focus-visible:ring-offset-1 focus-visible:ring-offset-bg-primary disabled:pointer-events-none disabled:opacity-50 cursor-pointer ${className}`.trim()}
+        style={{
+          fontFamily: "var(--font-inter), sans-serif",
+          borderColor: open ? "color-mix(in srgb, var(--accent-primary) 48%, var(--border-primary))" : undefined,
+          boxShadow: open ? "0 0 0 3px color-mix(in srgb, var(--accent-primary) 11%, transparent)" : undefined,
+        }}
       >
         <span className="inline-flex items-center gap-[7px] truncate min-w-0">
           {selected?.icon && (
@@ -233,10 +237,14 @@ export function Select<T extends string = string>({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: -4 }}
               transition={{ duration: 0.13, ease: "easeOut" }}
-              className="fixed z-[9999] overflow-hidden rounded-md border border-border-primary bg-bg-primary p-[6px]"
-              style={menuStyle}
+              className="fixed z-[9999] overflow-x-hidden overflow-y-auto rounded-[14px] border border-border-primary/90 bg-bg-primary/95 p-[6px] backdrop-blur-xl"
+              style={{
+                ...menuStyle,
+                maxHeight: "min(320px, calc(100vh - 32px))",
+                boxShadow: "0 18px 44px rgba(0, 0, 0, 0.36), 0 1px 0 rgba(255, 255, 255, 0.045) inset",
+              }}
             >
-              <div className="flex flex-col gap-[2px]">
+              <div className="flex flex-col gap-[3px]">
                 {options.map((option) => {
                   const isActive = option.value === value;
                   return (
@@ -251,15 +259,17 @@ export function Select<T extends string = string>({
                       }}
                       className={`flex w-full items-center justify-between gap-[8px] rounded-md px-[10px] py-[7px] text-[13px] transition-colors ${
                         isActive
-                          ? "bg-border-alpha-14 text-text-primary"
+                          ? "bg-accent-primary/10 text-text-primary"
                           : "bg-transparent text-text-secondary hover:bg-border-alpha-14 hover:text-text-primary"
                       } border-none cursor-pointer`}
                       style={{
                         fontFamily: "var(--font-inter), sans-serif",
                         fontWeight: isActive ? 500 : 400,
+                        boxShadow: isActive ? "inset 2px 0 0 var(--accent-primary)" : undefined,
                       }}
                     >
                       <span className="flex items-center gap-[8px] min-w-0">
+                        <span className={`h-[5px] w-[5px] shrink-0 rounded-full ${isActive ? "bg-accent-primary" : "bg-transparent"}`} />
                         {option.icon && (
                           <span className="shrink-0 flex items-center">
                             {option.icon}

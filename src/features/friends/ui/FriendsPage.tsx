@@ -13,6 +13,7 @@ import {
   type ListeningRoomSnapshot,
 } from "../listeningRoom";
 import Button from "@/shared/ui/Button";
+import Select from "@/shared/ui/Select";
 import TextInput from "@/shared/ui/TextInput";
 import UserAvatar from "@/shared/ui/UserAvatar";
 import TrackReactions from "./TrackReactions";
@@ -527,7 +528,17 @@ export default function FriendsPage() {
         {!loading && activeTab === "playlists" && <section className="flex flex-col gap-[18px]">
           <form onSubmit={(event) => void createPlaylist(event)} className="flex flex-wrap items-end gap-[9px] rounded-xl border border-border-primary bg-bg-panel p-[16px]">
             <label className="min-w-[200px] flex-1 text-[12px] text-text-secondary">Playlist name<TextInput className="mt-[6px]" value={playlistTitle} onChange={(event) => setPlaylistTitle(event.target.value)} placeholder="Late night mix" maxLength={100} /></label>
-            <label className="min-w-[180px] text-[12px] text-text-secondary">Share with<select value={selectedFriendId} onChange={(event) => setSelectedFriendId(event.target.value)} className="mt-[6px] h-[44px] w-full rounded-md border border-border-primary bg-bg-primary px-[12px] text-[13px] text-text-primary" disabled={friends.length === 0}><option value="">Just me for now</option>{friends.map((friend) => <option key={friend.id} value={friend.id}>{personName(friend)}</option>)}</select></label>
+            <label className="min-w-[180px] text-[12px] text-text-secondary">Share with<Select
+              options={[
+                { value: "", label: "Just me for now" },
+                ...friends.map((friend) => ({ value: friend.id, label: personName(friend) })),
+              ]}
+              value={selectedFriendId}
+              onChange={setSelectedFriendId}
+              disabled={friends.length === 0}
+              aria-label="Share with"
+              className="mt-[6px] h-[44px] w-full !rounded-[12px]"
+            /></label>
             <Button type="submit" disabled={busy || !playlistTitle.trim()}>Create shared playlist</Button>
           </form>
           {playlists.length === 0 ? <EmptyState>Create a playlist above and add songs you and your friends want to hear.</EmptyState> : playlists.map((playlist) => <div key={playlist.id} className="overflow-hidden rounded-xl border border-border-primary bg-bg-panel">

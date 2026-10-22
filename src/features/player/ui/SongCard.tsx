@@ -12,6 +12,9 @@ import type { TrackArtist } from "@/shared/types";
 
 export interface SongCardProps {
   id?: string;
+  isCurrentTrack?: boolean;
+  isPlaying?: boolean;
+  playbackAccent?: string;
   title: string;
   artists?: string;
   artistId?: string;
@@ -43,6 +46,10 @@ export interface SongCardProps {
 }
 
 function SongCard({
+  id,
+  isCurrentTrack = false,
+  isPlaying = false,
+  playbackAccent = "var(--accent-primary)",
   title,
   artists,
   artistId,
@@ -84,6 +91,15 @@ function SongCard({
   const artistSizeClass = compact ? "text-[12px]" : "text-[15px]";
   const gapClass = compact ? "gap-[12px]" : "gap-[16px]";
   const paddingClass = compact ? "p-[6px]" : "p-[8px]";
+  const currentTrackStyle: React.CSSProperties | undefined = isCurrentTrack
+    ? {
+        "--song-playing-accent": playbackAccent,
+        outline: "1px solid color-mix(in srgb, var(--song-playing-accent) 56%, transparent)",
+        outlineOffset: "-1px",
+        backgroundColor: "color-mix(in srgb, var(--song-playing-accent) 8%, transparent)",
+        boxShadow: "0 6px 24px color-mix(in srgb, var(--song-playing-accent) 10%, transparent)",
+      } as React.CSSProperties
+    : undefined;
 
   const handleClick = (e: React.MouseEvent) => {
     if (typeof window !== "undefined" && window.__linerWasDragging) {
@@ -119,6 +135,9 @@ function SongCard({
       className={`group w-full flex items-center justify-between rounded-md ${paddingClass} outline-none transition-colors duration-150 ease-out ${
         className ?? ""
       } ${onPlay ? "cursor-pointer" : ""} ${onPlay && !className?.includes("hover:bg-") ? "hover:bg-border-alpha-14" : ""}`}
+      data-track-id={id}
+      data-current-track={isCurrentTrack || undefined}
+      style={currentTrackStyle}
       onClick={handleClick}
       onPointerDown={(e) => {
         if (clickTimerRef.current) {
@@ -190,13 +209,27 @@ function SongCard({
         <div className="min-w-0 flex flex-col gap-[2px]">
           <div className="flex items-center gap-[8px]">
             <h3
-              className={`m-0 max-w-[min(52vw,560px)] overflow-hidden text-ellipsis whitespace-nowrap ${titleSizeClass} leading-[1.2] text-text-primary`}
+              className={`m-0 flex max-w-[min(52vw,560px)] min-w-0 items-center gap-[7px] overflow-hidden text-ellipsis whitespace-nowrap ${titleSizeClass} leading-[1.2] text-text-primary`}
               style={{
                 fontFamily: "var(--font-inter), sans-serif",
                 fontWeight: 400,
               }}
             >
-              {highlight ? <HighlightedText text={title} query={highlight} /> : title}
+              {isCurrentTrack && (
+                <span
+                  role="img"
+                  aria-label={isPlaying ? "Now playing" : "Current track"}
+                  className={`song-playing-indicator ${isPlaying ? "song-playing-indicator--playing" : "song-playing-indicator--paused"}`}
+                  style={{ color: playbackAccent }}
+                >
+                  <span />
+                  <span />
+                  <span />
+                </span>
+              )}
+              <span className="min-w-0 truncate">
+                {highlight ? <HighlightedText text={title} query={highlight} /> : title}
+              </span>
             </h3>
             {repostedBy && (
               <div
