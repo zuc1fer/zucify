@@ -34,7 +34,7 @@ export interface ArtistPageData {
   singles: ArtistReleaseViewModel[];
 }
 
-export function useArtist(id: string | null) {
+export function useArtist(id: string | null, fallbackName?: string | null) {
   const [data, setData] = useState<ArtistPageData | null>(null);
   const [loading, setLoading] = useState<boolean>(Boolean(id));
 
@@ -53,7 +53,23 @@ export function useArtist(id: string | null) {
 
     async function loadArtist() {
       try {
-        const artist = await api.getArtist(artistId);
+        let artist;
+        try {
+          artist = await api.getArtist(artistId);
+        } catch (initialError) {
+          const query = fallbackName?.trim();
+          if (!query || query.toLocaleLowerCase() === artistId.toLocaleLowerCase()) {
+            throw initialError;
+          }
+          const results = await api.search(query, "artist");
+          const candidates = results.items.filter((item) => item.type === "artist");
+          const exactMatch = candidates.find(
+            (candidate) => candidate.name.trim().toLocaleLowerCase() === query.toLocaleLowerCase(),
+          );
+          const match = exactMatch ?? candidates[0];
+          if (!match) throw initialError;
+          artist = await api.getArtist(match.id);
+        }
         if (!active) return;
         const tracks = artist.tracks.map(toClientTrack);
         const formatted: ArtistPageData = {
@@ -105,7 +121,7 @@ export function useArtist(id: string | null) {
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [fallbackName, id]);
 
   return { data, loading };
 }

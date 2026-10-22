@@ -2,6 +2,7 @@ import React, { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
 import TrackReactions from "./TrackReactions";
+import { TRACK_REACTION_EMOJIS } from "../socialApi";
 
 // @ts-expect-error - act support flag in vitest browserless DOM environment
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -23,31 +24,37 @@ describe("TrackReactions", () => {
     root = null;
   });
 
-  it("shows reaction counts and the current user's selected reaction", () => {
+  it("keeps the track row compact and shows reaction counts on its trigger", () => {
     act(() => root?.render(
       <TrackReactions
         title="Song"
-        reactions={[{ emoji: "🔥", count: 3, reactedByMe: true }]}
+        reactions={[{ emoji: TRACK_REACTION_EMOJIS[1], count: 3, reactedByMe: true }]}
         onReaction={vi.fn()}
       />,
     ));
 
-    const fireButton = container?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]');
-    expect(fireButton?.getAttribute("aria-pressed")).toBe("true");
-    expect(fireButton?.getAttribute("aria-label")).toContain("🔥");
-    expect(fireButton?.textContent).toContain("3");
-    expect(container?.querySelectorAll("button")).toHaveLength(5);
+    const trigger = container?.querySelector<HTMLButtonElement>("button");
+    expect(container?.querySelectorAll("button")).toHaveLength(1);
+    expect(trigger?.getAttribute("aria-pressed")).toBe("true");
+    expect(trigger?.textContent).toContain("3");
   });
 
-  it("requests the inverse reaction state when a button is clicked", () => {
+  it("opens the reaction choices and toggles the selected emoji", () => {
     const onReaction = vi.fn();
     act(() => root?.render(
       <TrackReactions title="Song" reactions={[]} onReaction={onReaction} />,
     ));
 
-    const heartButton = container?.querySelector<HTMLButtonElement>('button[aria-label="React with ❤️ to Song"]');
-    act(() => heartButton?.click());
+    const trigger = container?.querySelector<HTMLButtonElement>(
+      'button[aria-label="Choose a reaction for Song"]',
+    );
+    act(() => trigger?.click());
 
-    expect(onReaction).toHaveBeenCalledWith("❤️", true);
+    const choices = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("[data-dropdown-menu] button"),
+    );
+    expect(choices).toHaveLength(TRACK_REACTION_EMOJIS.length);
+    act(() => choices[0]?.click());
+    expect(onReaction).toHaveBeenCalledWith(TRACK_REACTION_EMOJIS[0], true);
   });
 });

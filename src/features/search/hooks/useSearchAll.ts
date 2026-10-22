@@ -35,15 +35,42 @@ export function useSearchAll(
       try {
         const res = await api.search(q, "all");
         if (requestId !== latestRequestIdRef.current) return;
-        setItems(res.items);
+        let items = res.items;
+        // Some catalog providers return artists and albums for an "all"
+        // query but omit matching songs. Fill that gap with the track search.
+        if (!items.some((item) => item.type === "track")) {
+          const tracks = await api.search(q, "track").catch(() => null);
+          if (requestId !== latestRequestIdRef.current) return;
+          if (tracks) {
+            items = [
+              ...items,
+              ...tracks.items.filter(
+                (item) =>
+                  item.type === "track" &&
+                  !items.some((existing) => existing.type === "track" && existing.id === item.id),
+              ),
+            ];
+          }
+        }
+        setItems(items);
         setPartialWarning(undefined);
         lastFetchedQueryRef.current = q;
         setHasLoaded(true);
       } catch {
         if (requestId !== latestRequestIdRef.current) return;
-        setItems([]);
-        setPartialWarning(undefined);
-        setHasLoaded(true);
+        try {
+          const tracks = await api.search(q, "track");
+          if (requestId !== latestRequestIdRef.current) return;
+          setItems(tracks.items.filter((item) => item.type === "track"));
+          setPartialWarning(undefined);
+          setHasLoaded(true);
+          lastFetchedQueryRef.current = q;
+        } catch {
+          if (requestId !== latestRequestIdRef.current) return;
+          setItems([]);
+          setPartialWarning(undefined);
+          setHasLoaded(true);
+        }
       } finally {
         if (requestId === latestRequestIdRef.current) setLoading(false);
       }

@@ -58,8 +58,9 @@ function ArtistContent() {
   const hasCustomBg = useIsContentTransparent();
   const [searchParams] = useSearchParams();
   const id = searchParams.get("id");
+  const artistName = searchParams.get("name");
 
-  const { data, loading } = useArtist(id);
+  const { data, loading } = useArtist(id, artistName);
   const [showAllTracks, setShowAllTracks] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [imagesLoaded, setImagesLoaded] = useState(false);

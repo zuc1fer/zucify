@@ -414,16 +414,16 @@ export default function LibraryPage() {
       >
         <div className="sticky top-0 z-20 bg-transparent">
 
-          <div className="px-[32px] pt-[20px] pb-[10px]">
+          <div className="px-[32px] pt-[20px] pb-[10px] max-md:px-4 max-md:pt-4 max-md:pb-2">
             <h1
-              className="text-[26px] font-bold text-text-primary tracking-tight m-0 leading-tight"
+              className="text-[26px] font-bold text-text-primary tracking-tight m-0 leading-tight max-md:text-[22px]"
               style={{ fontFamily: "var(--font-inter), sans-serif" }}
             >
               {t("library.title")}
             </h1>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-[10px] px-[32px] pb-[10px]">
+          <div className="flex flex-wrap items-center justify-between gap-[10px] px-[32px] pb-[10px] max-md:flex-col max-md:items-stretch max-md:gap-2 max-md:px-4 max-md:pb-2">
             <LibraryTabs activeTab={activeTab} onChange={setActiveTab} />
             <LibraryControls
               activeTab={activeTab}
@@ -442,7 +442,7 @@ export default function LibraryPage() {
         </div>
 
 
-        <div className="px-[32px] pt-[4px] pb-[20px]">
+        <div className="px-[32px] pt-[4px] pb-[20px] max-md:px-4 max-md:pt-2 max-md:pb-4">
           {activeTab === "playlists" && playlistsError ? (
             <div className="mb-[10px] text-[12px] text-accent-secondary">
               {t("playlist.error_loading")}

@@ -808,7 +808,7 @@ export default function AppFrame({ children }: AppFrameProps) {
         )}
       </div>
 
-      <MobileNavigation searchOpen={searchOpen} onSearchToggle={handleSearchToggle} />
+      <MobileNavigation />
 
       <AnimatePresence initial={false}>
         {fullscreenPlayerOpen ? (

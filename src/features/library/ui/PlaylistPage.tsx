@@ -178,8 +178,22 @@ function LibraryPlaylistContent() {
   const socialPlaylistId = isSharedMode ? decodedId!.slice("shared:".length) : null;
   const isReadOnly = isLikesMode || isSharedMode;
   const scrollRef = useRef<HTMLDivElement>(null);
+  const playlistHeaderRef = useRef<HTMLDivElement>(null);
+  const [isMobileLayout, setIsMobileLayout] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches,
+  );
+  const [mobileHeaderHeight, setMobileHeaderHeight] = useState(0);
+  const mobileScrollMargin = isMobileLayout ? mobileHeaderHeight : 0;
   const { t } = useTranslation();
   const hasCustomBg = useIsContentTransparent();
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const updateLayout = () => setIsMobileLayout(media.matches);
+    updateLayout();
+    media.addEventListener("change", updateLayout);
+    return () => media.removeEventListener("change", updateLayout);
+  }, []);
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [isEditingDescription, setIsEditingDescription] = useState(false);
@@ -267,6 +281,16 @@ function LibraryPlaylistContent() {
       revision: playlistDetail.revision,
     };
   })();
+
+  useEffect(() => {
+    const header = playlistHeaderRef.current;
+    if (!header) return;
+    const measure = () => setMobileHeaderHeight(header.getBoundingClientRect().height);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, [isMobileLayout, viewData?.title, linkedPlaylist?.members.length]);
 
   useEffect(() => {
     if (!socialConfigured) {
@@ -638,6 +662,7 @@ function LibraryPlaylistContent() {
     count: visibleTracks.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 64,
+    scrollMargin: mobileScrollMargin,
     overscan: 25,
     getItemKey: (index) =>
       visibleTracks[index]?.track.playlistItemId ??
@@ -836,8 +861,16 @@ function LibraryPlaylistContent() {
               isReady ? "opacity-100" : "opacity-0 pointer-events-none"
             }`}
           >
-            <div className="relative z-10 flex flex-row items-stretch gap-[16px] pl-[32px] pr-[16px] h-full w-full min-h-0 box-border max-md:flex-col max-md:gap-0 max-md:px-4">
+            <div
+              ref={isMobileLayout ? scrollRef : undefined}
+              onScroll={() => {
+                if (rafIdRef.current === null) targetScrollTopRef.current = null;
+              }}
+              className="relative z-10 flex flex-row items-stretch gap-[16px] pl-[32px] pr-[16px] h-full w-full min-h-0 box-border max-md:flex-col max-md:gap-0 max-md:overflow-y-auto max-md:overflow-x-hidden max-md:overscroll-contain max-md:scroll-smooth max-md:px-4"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
               <div
+                ref={playlistHeaderRef}
                 className="shrink-0 w-[280px] self-start pt-[56px] pb-[24px] max-md:w-full max-md:pt-0 max-md:pb-2"
                 data-no-window-drag
               >
@@ -1282,15 +1315,15 @@ function LibraryPlaylistContent() {
               </div>
 
               <div
-                ref={scrollRef}
+                ref={!isMobileLayout ? scrollRef : undefined}
                 data-no-window-drag
                 onScroll={() => {
                   if (rafIdRef.current === null) {
                     targetScrollTopRef.current = null;
                   }
                 }}
-                className="min-w-0 flex-1 h-full min-h-0 overflow-y-auto overflow-x-hidden px-[8px] pt-[56px] pb-[24px] overscroll-contain max-md:px-0 max-md:pt-0 max-md:pb-4"
-                style={{ willChange: "scroll-position" }}
+                className="min-w-0 flex-1 h-full min-h-0 overflow-y-auto overflow-x-hidden px-[8px] pt-[56px] pb-[24px] overscroll-contain max-md:h-auto max-md:flex-none max-md:overflow-visible max-md:px-0 max-md:pt-0 max-md:pb-4"
+                style={{ willChange: "scroll-position", WebkitOverflowScrolling: isMobileLayout ? "auto" : undefined }}
               >
               {currentTracks.length === 0 ? (
                 <div className="flex min-h-[50vh] flex-col items-center justify-center gap-[12px] text-center">
@@ -1404,7 +1437,7 @@ function LibraryPlaylistContent() {
                         left: 0,
                         width: "100%",
                         height: `${virtualRow.size}px`,
-                        transform: `translateY(${virtualRow.start + shiftY}px)`,
+                        transform: `translateY(${virtualRow.start - mobileScrollMargin + shiftY}px)`,
                         transition: isDragging
                           ? "transform 180ms cubic-bezier(0.2, 0, 0, 1)"
                           : undefined,

@@ -87,7 +87,7 @@ export default function ArtistLink({
                 ? (e) => {
                     e.stopPropagation();
                     onNavigate?.();
-                    navigate(`/artist?id=${encodeURIComponent(targetId)}`);
+                    navigate(`/artist?id=${encodeURIComponent(targetId)}&name=${encodeURIComponent(artist.name)}`);
                   }
                 : undefined
             }
@@ -98,7 +98,7 @@ export default function ArtistLink({
                       e.preventDefault();
                       e.stopPropagation();
                       onNavigate?.();
-                      navigate(`/artist?id=${encodeURIComponent(targetId)}`);
+                      navigate(`/artist?id=${encodeURIComponent(targetId)}&name=${encodeURIComponent(artist.name)}`);
                     }
                   }
                 : undefined
@@ -125,14 +125,14 @@ export default function ArtistLink({
           onClick={(e) => {
             e.stopPropagation();
             onNavigate?.();
-            navigate(`/artist?id=${encodeURIComponent(artistId)}`);
+            navigate(`/artist?id=${encodeURIComponent(artistId)}&name=${encodeURIComponent(text)}`);
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
               e.stopPropagation();
               onNavigate?.();
-              navigate(`/artist?id=${encodeURIComponent(artistId)}`);
+              navigate(`/artist?id=${encodeURIComponent(artistId)}&name=${encodeURIComponent(text)}`);
             }
           }}
         >
@@ -162,14 +162,14 @@ export default function ArtistLink({
               onClick={(e) => {
                 e.stopPropagation();
                 onNavigate?.();
-                navigate(`/artist?id=${encodeURIComponent(part)}`);
+                navigate(`/artist?id=${encodeURIComponent(part)}&name=${encodeURIComponent(part)}`);
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
                   e.stopPropagation();
                   onNavigate?.();
-                  navigate(`/artist?id=${encodeURIComponent(part)}`);
+                  navigate(`/artist?id=${encodeURIComponent(part)}&name=${encodeURIComponent(part)}`);
                 }
               }}
             >
@@ -189,14 +189,14 @@ export default function ArtistLink({
             onClick={(e) => {
               e.stopPropagation();
               onNavigate?.();
-              navigate(`/artist?id=${encodeURIComponent(text)}`);
+              navigate(`/artist?id=${encodeURIComponent(text)}&name=${encodeURIComponent(text)}`);
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
                 e.stopPropagation();
                 onNavigate?.();
-                navigate(`/artist?id=${encodeURIComponent(text)}`);
+                navigate(`/artist?id=${encodeURIComponent(text)}&name=${encodeURIComponent(text)}`);
               }
             }}
           >

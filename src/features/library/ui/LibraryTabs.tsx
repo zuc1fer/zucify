@@ -25,7 +25,7 @@ export default function LibraryTabs({
 
   return (
     <div
-      className={`inline-flex items-center gap-[4px] rounded-xl p-[4px] ${
+      className={`inline-flex items-center gap-[4px] rounded-xl p-[4px] max-md:w-full max-md:justify-between ${
         hasCustomBg
           ? "apple-glass-pill"
           : "bg-bg-elevated"
@@ -38,7 +38,7 @@ export default function LibraryTabs({
             key={tab}
             type="button"
             onClick={() => onChange(tab)}
-            className={`relative inline-flex items-center justify-center rounded-lg px-[16px] py-[7px] text-[13px] leading-none transition-colors duration-150 border-0 bg-transparent cursor-pointer select-none active:scale-[0.97] ${
+            className={`relative inline-flex items-center justify-center rounded-lg px-[16px] py-[7px] text-[13px] leading-none transition-colors duration-150 border-0 bg-transparent cursor-pointer select-none active:scale-[0.97] max-md:flex-1 max-md:px-[10px] max-md:py-[8px] max-md:text-[12px] ${
               isActive
                 ? hasCustomBg
                   ? "text-white dark:text-black font-semibold"

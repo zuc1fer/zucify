@@ -4,15 +4,7 @@ import { useTranslation } from "@/languages";
 import { sidebarNavItems } from "../data/navigation";
 import { useModalStore } from "@/features/library";
 
-interface MobileNavigationProps {
-  searchOpen: boolean;
-  onSearchToggle: () => void;
-}
-
-export default function MobileNavigation({
-  searchOpen,
-  onSearchToggle,
-}: MobileNavigationProps) {
+export default function MobileNavigation() {
   const { pathname } = useLocation();
   const { t } = useTranslation();
   const settingsOpen = useModalStore((state) => state.settingsOpen);
@@ -27,7 +19,7 @@ export default function MobileNavigation({
   return (
     <nav
       aria-label="Main navigation"
-      className="relative z-[45] grid shrink-0 grid-cols-5 border-t border-border-primary/60 bg-bg-primary/95 backdrop-blur-xl md:hidden"
+      className="relative z-[45] grid shrink-0 grid-cols-4 border-t border-border-primary/60 bg-bg-primary/95 backdrop-blur-xl md:hidden"
       style={
         Capacitor.isNativePlatform()
           ? {
@@ -37,14 +29,10 @@ export default function MobileNavigation({
           : { height: 62 }
       }
     >
-      {sidebarNavItems.map((item) => {
+      {sidebarNavItems.filter((item) => item.id !== "search").map((item) => {
         const Icon = item.Icon;
         const active =
-          item.id === "search"
-            ? searchOpen
-            : item.id === "settings"
-              ? settingsOpen
-              : isRouteActive(item.href);
+          item.id === "settings" ? settingsOpen : isRouteActive(item.href);
         const label = t(`common.sidebar.${item.id}`) || item.label;
         const content = (
           <>
@@ -54,21 +42,6 @@ export default function MobileNavigation({
             </span>
           </>
         );
-
-        if (item.id === "search") {
-          return (
-            <button
-              key={item.id}
-              type="button"
-              aria-label={label}
-              aria-pressed={searchOpen}
-              onClick={onSearchToggle}
-              className="flex min-w-0 flex-col items-center justify-center gap-[5px] border-0 bg-transparent p-0 active:scale-95"
-            >
-              {content}
-            </button>
-          );
-        }
 
         if (item.id === "settings") {
           return (

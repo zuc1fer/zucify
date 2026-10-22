@@ -389,7 +389,7 @@ export default function LibraryGrid({
   }
 
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(165px,1fr))] gap-[24px] pb-[24px]">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(165px,1fr))] gap-[24px] pb-[24px] max-md:grid-cols-[repeat(auto-fill,minmax(min(145px,100%),1fr))] max-md:gap-3 max-md:pb-4">
       {prepends.map((node, index) => (
         <div
           key={`prepend-${index}`}

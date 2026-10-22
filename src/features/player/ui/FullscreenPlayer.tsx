@@ -407,8 +407,8 @@ export function FullscreenPlayer({
 
       <div className="absolute inset-0 z-[1] bg-black/40" />
 
-      <div className="absolute inset-0 z-10 flex">
-        <div className={`flex-1 flex flex-col items-center justify-center gap-5 max-md:h-full max-md:flex-none max-md:gap-[clamp(12px,2.4dvh,22px)] max-md:overflow-y-auto max-md:overscroll-contain max-md:pt-[calc(env(safe-area-inset-top)+72px)] max-md:pb-[calc(env(safe-area-inset-bottom)+20px)] ${mobileView === "player" ? "max-md:flex" : "max-md:hidden"}`}>
+      <div className="absolute inset-0 z-10 flex max-md:flex-col">
+        <div className={`flex-1 flex flex-col items-center justify-center gap-5 max-md:h-full max-md:w-full max-md:min-w-0 max-md:flex-1 max-md:gap-[clamp(12px,2.4dvh,22px)] max-md:overflow-y-auto max-md:overscroll-contain max-md:pt-[calc(env(safe-area-inset-top)+72px)] max-md:pb-[calc(env(safe-area-inset-bottom)+20px)] ${mobileView === "player" ? "max-md:flex" : "max-md:hidden"}`}>
           <PlayerUiElements onClose={onClose} />
         </div>
 
@@ -548,7 +548,7 @@ export function FullscreenPlayer({
             role="tab"
             aria-selected={mobileView === view}
             onClick={() => setMobileView(view)}
-            className={`h-9 min-w-[92px] rounded-full border-0 px-4 text-[12px] font-medium transition-colors ${
+            className={`h-9 min-w-[108px] whitespace-nowrap rounded-full border-0 px-3 text-[12px] font-medium transition-colors ${
               mobileView === view
                 ? "bg-white/15 text-white"
                 : "bg-transparent text-white/60"

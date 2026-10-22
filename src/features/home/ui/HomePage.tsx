@@ -16,6 +16,7 @@ import SongCard from "@/features/player/ui/SongCard";
 import SongCardWithMenu from "@/features/player/ui/SongCardWithMenu";
 import { useTranslation } from "@/languages";
 import { useIsContentTransparent } from "@/features/settings/store/customizationStore";
+import { useModalStore } from "@/features/library";
 import {
   FireFill,
   TrophyFill,
@@ -24,6 +25,7 @@ import {
   PlaylistFill,
   HeartFill,
   FlashCircleFill,
+  Search3Line,
 } from "@mingcute/react";
 
 export default function HomePage() {
@@ -98,6 +100,17 @@ export default function HomePage() {
         style={{ marginBottom: "-32px" }}
         aria-hidden="true"
       />
+      <div className="relative z-10 px-4 pt-3 md:hidden">
+        <button
+          type="button"
+          onClick={() => useModalStore.getState().openSearch()}
+          className="flex h-11 w-full items-center gap-3 rounded-xl border border-border-primary/60 bg-bg-panel/80 px-4 text-left text-[14px] text-text-tertiary shadow-sm backdrop-blur-xl active:scale-[0.99]"
+          aria-label={t("common.search")}
+        >
+          <Search3Line size={18} />
+          <span>{t("common.search")}</span>
+        </button>
+      </div>
       {!hasCustomBg && (
         <div
           aria-hidden="true"

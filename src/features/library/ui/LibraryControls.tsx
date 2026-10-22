@@ -35,13 +35,13 @@ export default function LibraryControls({
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-[10px]">
+    <div className="flex flex-wrap items-center gap-[10px] max-md:w-full max-md:flex-nowrap max-md:gap-2">
       <TextInput
         value={query}
         onChange={(event) => onQueryChange(event.target.value)}
         placeholder={placeholderByTab[activeTab]}
         icon={<Search2Line size={16} className={hasCustomBg ? "!text-white/60 dark:!text-white/60" : undefined} />}
-        className={`!h-[34px] w-[220px] md:w-[260px] rounded-lg ${
+        className={`!h-[34px] w-[220px] md:w-[260px] rounded-lg max-md:flex-1 max-md:min-w-0 ${
           hasCustomBg
             ? "apple-glass-pill !border-none [&_input]:placeholder:!text-white/50 dark:[&_input]:placeholder:!text-white/50"
             : "border-border-primary bg-bg-elevated"
