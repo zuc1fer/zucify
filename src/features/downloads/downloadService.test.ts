@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { audioCache, linerDb, resolvePlaybackStream, downloadAudioBytes, records } = vi.hoisted(() => ({
+const { audioCache, linerDb, resolvePlaybackStream, downloadAudioBytes, ensureLyricsCached, cacheCoverArtForOffline, records } = vi.hoisted(() => ({
   audioCache: {
     currentGeneration: vi.fn(() => 4),
     saveAudioBlob: vi.fn(),
@@ -14,20 +14,26 @@ const { audioCache, linerDb, resolvePlaybackStream, downloadAudioBytes, records 
     getDownloadedAudioRecords: vi.fn(),
     getDownloadedPlaylists: vi.fn(),
     putDownloadedPlaylist: vi.fn(),
+    deleteDownloadedPlaylist: vi.fn(),
     removeTrackFromDownloadedPlaylists: vi.fn(),
   },
   resolvePlaybackStream: vi.fn(),
   downloadAudioBytes: vi.fn(),
+  ensureLyricsCached: vi.fn(),
+  cacheCoverArtForOffline: vi.fn(),
   records: { audio: null as any },
 }));
 
 vi.mock("@/shared/storage", () => ({ audioCache, linerDb }));
 vi.mock("@/features/player/engine/streamResolver", () => ({ resolvePlaybackStream }));
+vi.mock("@/features/player/engine/playerEngine", () => ({ playerEngine: { ensureLyricsCached } }));
+vi.mock("@/features/covers", () => ({ cacheCoverArtForOffline }));
 vi.mock("@/shared/media/innertube", () => ({ downloadAudioBytes }));
 
 import {
   downloadTrackForOffline,
   removeDownloadedTrack,
+  removeDownloadedPlaylist,
   saveDownloadedPlaylist,
 } from "./downloadService";
 
@@ -45,6 +51,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   records.audio = null;
   linerDb.getAudio.mockImplementation(async () => records.audio);
+  linerDb.getDownloadedPlaylists.mockResolvedValue([]);
   linerDb.markAudioDownloaded.mockImplementation(async (trackId: string) => {
     if (!records.audio || records.audio.trackId !== trackId) return null;
     records.audio = { ...records.audio, downloadedAt: 1234 };
@@ -78,6 +85,8 @@ describe("offline track downloads", () => {
       signal: controller.signal,
     }));
     expect(audioCache.saveAudioBlob).toHaveBeenCalledWith(track.id, expect.any(Blob), "audio/ogg", 4, true);
+    expect(ensureLyricsCached).toHaveBeenCalledWith(track);
+    expect(cacheCoverArtForOffline).toHaveBeenCalledWith(track.coverUrl);
     expect(result).toMatchObject({ track, downloadedAt: 1234, byteSize: audioBytes.length });
     expect(linerDb.putTrack).toHaveBeenCalledWith(track);
   });
@@ -109,6 +118,38 @@ describe("offline track downloads", () => {
     expect(linerDb.removeTrackFromDownloadedPlaylists).toHaveBeenCalledWith(track.id);
   });
 
+  it("removes the orphaned audio when its downloaded playlist is deleted", async () => {
+    const playlist = { id: "playlist-a", trackIds: [track.id] } as any;
+    linerDb.getDownloadedPlaylists
+      .mockResolvedValueOnce([playlist])
+      .mockResolvedValueOnce([]);
+    linerDb.getAudio.mockResolvedValue({
+      trackId: track.id,
+      blob: new Blob([audioBytes], { type: "audio/ogg" }),
+      mimeType: "audio/ogg",
+      byteSize: audioBytes.length,
+      savedAt: 1000,
+      downloadedAt: 1234,
+    });
+
+    await removeDownloadedPlaylist(playlist.id);
+
+    expect(linerDb.deleteDownloadedPlaylist).toHaveBeenCalledWith(playlist.id);
+    expect(audioCache.deleteAudio).toHaveBeenCalledWith(track.id);
+  });
+
+  it("keeps audio used by another downloaded playlist", async () => {
+    const playlist = { id: "playlist-a", trackIds: [track.id] } as any;
+    const otherPlaylist = { id: "playlist-b", trackIds: [track.id] } as any;
+    linerDb.getDownloadedPlaylists
+      .mockResolvedValueOnce([playlist, otherPlaylist])
+      .mockResolvedValueOnce([otherPlaylist]);
+
+    await removeDownloadedPlaylist(playlist.id);
+
+    expect(audioCache.deleteAudio).not.toHaveBeenCalled();
+  });
+
   it("saves downloaded playlist metadata with unique track membership", async () => {
     const playlist = await saveDownloadedPlaylist({
       id: "source:playlist-1",
@@ -116,10 +157,13 @@ describe("offline track downloads", () => {
       coverUrl: "cover.jpg",
       coverUrls: ["cover.jpg", "cover.jpg"],
       trackIds: [track.id, track.id],
+      tracks: [track],
     });
 
     expect(playlist.trackIds).toEqual([track.id]);
+    expect(playlist.tracks).toEqual([track]);
     expect(playlist.downloadedAt).toBeTypeOf("number");
+    expect(linerDb.putTrack).toHaveBeenCalledWith(track);
     expect(linerDb.putDownloadedPlaylist).toHaveBeenCalledWith(playlist);
   });
 });

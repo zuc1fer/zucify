@@ -183,6 +183,23 @@ describe("PlayerRuntime audio caching", () => {
     expect(usePlayerStore.getState().status).toBe("playing");
   });
 
+  it("does not try the network for an undownloaded track while offline", async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(navigator, "onLine");
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    const streamResolver = mocks.resolvePlaybackStream;
+    const offlineTrack: Track = { ...track, id: "offline-missing-track" };
+
+    try {
+      await playerRuntime!.loadAndPlay(offlineTrack);
+      expect(streamResolver).not.toHaveBeenCalled();
+      expect(usePlayerStore.getState().status).toBe("error");
+      expect(usePlayerStore.getState().error).toContain("not downloaded");
+    } finally {
+      if (descriptor) Object.defineProperty(navigator, "onLine", descriptor);
+      else Reflect.deleteProperty(navigator, "onLine");
+    }
+  });
+
   it("fetches, plays, and saves to linerDb on cache miss", async () => {
     const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
     const sessionSpy = mocks.resolvePlaybackStream.mockResolvedValue(urlStream);

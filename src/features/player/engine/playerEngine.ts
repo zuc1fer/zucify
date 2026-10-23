@@ -1217,7 +1217,7 @@ class PlayerEngine {
 
         if (bestCandidate && shouldCacheLyricsCandidate(bestCandidate)) {
           lyricsCache.set(trackId, bestCandidate, providers);
-          void linerDb.putLyrics({
+          await linerDb.putLyrics({
             trackId,
             syncLevel: bestCandidate.syncLevel,
             quality: bestCandidate.quality.total,
@@ -1238,6 +1238,43 @@ class PlayerEngine {
 
     this.inFlightLyricsPrefetches.set(trackId, prefetchPromise);
     return prefetchPromise;
+  }
+
+  /** Fetch and persist lyrics while online so downloaded tracks retain their timestamps offline. */
+  public async ensureLyricsCached(track: Track): Promise<void> {
+    try {
+      const stored = await linerDb.getLyrics(track.id);
+      if (stored?.candidate) return;
+
+      const persist = async (cached: CachedLyricsItem | null) => {
+        if (!cached?.candidate) return;
+        await linerDb.putLyrics({
+          trackId: track.id,
+          syncLevel: cached.candidate.syncLevel,
+          quality: cached.candidate.quality.total,
+          activeProvider: cached.candidate.provider,
+          availableProviders: cached.availableProviders ?? [],
+          rawLyrics: cached.candidate.lyrics.content,
+          rawFormat: cached.candidate.lyrics.format,
+          candidate: cached.candidate,
+          providers: cached.providers,
+          lastCheckedAt: cached.timestamp,
+          updatedAt: cached.timestamp,
+        });
+      };
+
+      const inMemory = lyricsCache.get(track.id);
+      if (inMemory?.candidate) {
+        await persist(inMemory);
+        return;
+      }
+
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+      await this.prefetchLyrics(track.id, lyricsHint(track));
+      await persist(lyricsCache.get(track.id));
+    } catch {
+      // Lyrics are optional download metadata; audio downloads should still finish.
+    }
   }
 
   private async fetchLyricsForTrack(track: Track | null): Promise<void> {

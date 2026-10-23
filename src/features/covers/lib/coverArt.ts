@@ -18,6 +18,8 @@ import { prepareCoverFallback } from "./coverSigner";
 
 type CoverStatus = "loading" | "loaded" | "error";
 
+export const OFFLINE_COVER_CACHE_NAME = "zucify-offline-covers-v1";
+
 interface CoverEntry {
   status: CoverStatus;
   /**
@@ -179,6 +181,33 @@ export function preloadCoverArt(url: string | undefined): Promise<void> {
   entries.set(url, { status: "loading", promise });
   img.src = url;
   return promise;
+}
+
+/** Persist a cover response in CacheStorage so saved playlists can render it offline. */
+export async function cacheCoverArtForOffline(url: string | undefined): Promise<void> {
+  if (!url || typeof window === "undefined") return;
+
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    if ("caches" in window) {
+      const cache = await window.caches.open(OFFLINE_COVER_CACHE_NAME);
+      if (await cache.match(url, { ignoreVary: true })) return;
+
+      const controller = new AbortController();
+      timeout = setTimeout(() => controller.abort(), 8_000);
+      const response = await fetch(url, { mode: "cors", signal: controller.signal });
+      if (response.ok && response.type !== "opaque") {
+        await cache.put(url, response.clone());
+        return;
+      }
+    }
+  } catch {
+    // The image loader below also tries the app's cover proxy fallback.
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+
+  void preloadCoverArt(url);
 }
 
 /**

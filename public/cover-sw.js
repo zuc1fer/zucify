@@ -1,4 +1,5 @@
 const CACHE_NAME = "liner-covers-v2";
+const OFFLINE_CACHE_NAME = "zucify-offline-covers-v1";
 const MAX_ENTRIES = 600;
 
 const COVER_HOSTS = [
@@ -40,7 +41,7 @@ self.addEventListener("activate", (event) => {
       .keys()
       .then((keys) =>
         Promise.all(
-          keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)),
+          keys.filter((k) => k !== CACHE_NAME && k !== OFFLINE_CACHE_NAME).map((k) => caches.delete(k)),
         ),
       )
       .then(() => self.clients.claim()),
@@ -75,14 +76,20 @@ async function fetchAndCache(request, cache, cacheKey) {
 }
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET" || !isCoverRequest(event.request.url)) {
-    return;
-  }
+  if (event.request.method !== "GET") return;
+
+  const coverRequest = isCoverRequest(event.request.url);
+  if (navigator.onLine && !coverRequest) return;
 
   const cacheKey = event.request.url;
 
   event.respondWith(
-    caches.open(CACHE_NAME).then(async (cache) => {
+    caches.open(OFFLINE_CACHE_NAME).then(async (offlineCache) => {
+      const offlineSaved = await offlineCache.match(cacheKey, { ignoreVary: true });
+      if (offlineSaved) return offlineSaved;
+      if (!coverRequest) return fetch(event.request);
+
+      const cache = await caches.open(CACHE_NAME);
       const cached = await cache.match(cacheKey, { ignoreVary: true });
       if (cached) return cached;
 

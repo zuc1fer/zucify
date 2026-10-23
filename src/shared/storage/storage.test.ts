@@ -90,6 +90,30 @@ describe("linerDb storage layer", () => {
     expect(await linerDb.getDownloadedPlaylists()).toEqual([]);
   });
 
+  it("stores offline track snapshots and deletes a downloaded playlist", async () => {
+    const snapshot = {
+      id: "source:playlist-snapshot",
+      title: "Offline mix",
+      coverUrl: "cover.jpg",
+      coverUrls: ["cover.jpg"],
+      trackIds: ["snapshot-track"],
+      tracks: [{
+        id: "snapshot-track",
+        title: "Saved title",
+        artists: "Saved artist",
+        coverUrl: "song-cover.jpg",
+        durationMs: 123000,
+        playCount: 0,
+      }],
+      downloadedAt: 5678,
+    };
+    await linerDb.putDownloadedPlaylist(snapshot);
+
+    expect(await linerDb.getDownloadedPlaylists()).toMatchObject([snapshot]);
+    await linerDb.deleteDownloadedPlaylist(snapshot.id);
+    expect(await linerDb.getDownloadedPlaylists()).toEqual([]);
+  });
+
   it("stores lyrics and updates weekly checked timestamp", async () => {
     const initialTime = Date.now() - 10000;
     await linerDb.putLyrics({

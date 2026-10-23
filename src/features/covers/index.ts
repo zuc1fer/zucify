@@ -4,6 +4,8 @@ export { default as CoverImage } from "./ui/CoverImage";
 export { CoverSwRegistrar } from "./ui/CoverSwRegistrar";
 export {
   preloadCoverArt,
+  cacheCoverArtForOffline,
+  OFFLINE_COVER_CACHE_NAME,
   markCoverReady,
   isCoverReady,
   getCoverElement,

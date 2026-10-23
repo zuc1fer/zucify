@@ -737,6 +737,10 @@ export class PlayerRuntime {
         return;
       }
 
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        throw new Error("This song is not downloaded for offline listening.");
+      }
+
       const stream = await resolvePlaybackStream(track, controller.signal);
       this.ttfbMs = Math.round(performance.now() - this.loadStartTime);
 

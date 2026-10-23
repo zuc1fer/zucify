@@ -76,15 +76,37 @@ function getTracksForPlaylist(
     .filter((item): item is DownloadedTrack => Boolean(item));
 }
 
+function getPlaylistEntries(
+  playlist: DownloadedPlaylist,
+  itemsById: Map<string, DownloadedTrack>,
+): DownloadedTrack[] {
+  const tracksById = new Map((playlist.tracks ?? []).map((track) => [track.id, track]));
+  return playlist.trackIds.flatMap((trackId) => {
+    const downloaded = itemsById.get(trackId);
+    const track = downloaded?.track ?? tracksById.get(trackId);
+    if (!track) return [];
+    return [downloaded ?? { track, downloadedAt: 0, byteSize: 0 }];
+  });
+}
+
 export default function DownloadsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
+  const text = (key: string, fallback: string, vars?: Record<string, string | number>) => {
+    const translated = t(key, vars);
+    if (translated !== key) return translated;
+    return Object.entries(vars ?? {}).reduce(
+      (result, [name, value]) => result.replaceAll(`{${name}}`, String(value)),
+      fallback,
+    );
+  };
   const items = useDownloadsStore((state) => state.items);
   const playlists = useDownloadsStore((state) => state.playlists);
   const jobs = useDownloadsStore((state) => state.jobs);
   const isLoading = useDownloadsStore((state) => state.isLoading);
   const refresh = useDownloadsStore((state) => state.refresh);
+  const removePlaylist = useDownloadsStore((state) => state.removePlaylist);
   const [hasLoaded, setHasLoaded] = useState(false);
   const activeJobs = useMemo(() => Object.values(jobs), [jobs]);
   const trackCountLabel = (count: number) => count === 1
@@ -114,17 +136,19 @@ export default function DownloadsPage() {
   }), [activeJobs, allCoverUrls, items, t]);
   const savedPlaylist = playlists.find((playlist) => playlist.id === selectedPlaylistId) ?? null;
   const selectedPlaylist = isAllDownloads ? allDownloadsPlaylist : savedPlaylist;
-  const visiblePlaylists = useMemo(() => playlists.filter((playlist) =>
-    getTracksForPlaylist(playlist, itemsById).length > 0 || activeJobs.some((job) =>
-      job.status !== "failed" && playlist.trackIds.includes(job.track.id),
-    ),
-  ), [activeJobs, itemsById, playlists]);
+  const visiblePlaylists = useMemo(
+    () => playlists.filter((playlist) => playlist.trackIds.length > 0),
+    [playlists],
+  );
   const playlistItems = useMemo(() => {
     if (!selectedPlaylist) return [];
     if (selectedPlaylist.id === ALL_DOWNLOADS_ID) return items;
-    return getTracksForPlaylist(selectedPlaylist, itemsById);
+    return getPlaylistEntries(selectedPlaylist, itemsById);
   }, [items, itemsById, selectedPlaylist]);
-  const playlistTracks = useMemo(() => playlistItems.map((item) => item.track), [playlistItems]);
+  const playlistTracks = useMemo(
+    () => playlistItems.filter((item) => item.downloadedAt > 0).map((item) => item.track),
+    [playlistItems],
+  );
   const playlistJobs = useMemo(() => {
     if (!selectedPlaylist) return [];
     const trackIds = new Set(selectedPlaylist.trackIds);
@@ -144,7 +168,7 @@ export default function DownloadsPage() {
   }, [hasLoaded, isAllDownloads, navigate, savedPlaylist, selectedPlaylistId]);
 
   const playAll = () => {
-    const first = playlistItems[0]?.track;
+    const first = playlistTracks[0];
     if (first && selectedPlaylist) {
       playerEngine.playTrack(first, playlistTracks, `downloads:${selectedPlaylist.id}`, selectedPlaylist.coverUrl);
     }
@@ -181,10 +205,17 @@ export default function DownloadsPage() {
               <p className="mb-1 mt-0 text-[11px] font-medium uppercase tracking-wide text-text-tertiary">{t("downloads.offline_playlist")}</p>
               <h1 className="m-0 break-words text-[26px] font-bold tracking-tight text-text-primary max-md:text-[22px]">{selectedPlaylist.title}</h1>
               <p className="mb-0 mt-1 text-[12px] text-text-secondary">
-                {trackCountLabel(playlistItems.length)} <span className="px-1.5 text-text-tertiary">·</span> {formatBytes(playlistBytes)}
+                {trackCountLabel(playlistTracks.length)} <span className="px-1.5 text-text-tertiary">·</span> {formatBytes(playlistBytes)}
+                {playlistItems.length > playlistTracks.length && (
+                  <span className="ml-2 text-text-tertiary">
+                    {text("downloads.tracks_not_downloaded", "{count} not downloaded", {
+                      count: playlistItems.length - playlistTracks.length,
+                    })}
+                  </span>
+                )}
               </p>
             </div>
-            {playlistItems.length > 0 && (
+            {playlistTracks.length > 0 && (
               <button type="button" onClick={playAll} className="inline-flex h-10 items-center gap-2 rounded-xl border-0 bg-btn-primary-bg px-4 text-[13px] font-medium text-btn-primary-text active:scale-[0.98] max-md:w-full max-md:justify-center sm:ml-auto">
                 <PlayFill size={16} /> {t("downloads.play_all")}
               </button>
@@ -221,7 +252,21 @@ export default function DownloadsPage() {
                   coverUrl={item.track.coverUrl}
                   durationMs={item.track.durationMs}
                   onPlay={() => playerEngine.playTrack(item.track, playlistTracks, `downloads:${selectedPlaylist.id}`, selectedPlaylist.coverUrl)}
-                  rightContent={<span className="whitespace-nowrap text-[11px] text-text-tertiary">{formatBytes(item.byteSize)}</span>}
+                  rightContent={item.downloadedAt > 0 ? (
+                    <span
+                      className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] text-emerald-400"
+                      title={text("downloads.downloaded_for_offline", "Downloaded for offline listening")}
+                    >
+                      <DownloadFill size={13} /> {formatBytes(item.byteSize)}
+                    </span>
+                  ) : (
+                    <span
+                      className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] text-text-tertiary"
+                      title={text("downloads.not_downloaded", "Not downloaded")}
+                    >
+                      <DownloadFill size={13} className="opacity-40" /> {text("downloads.not_downloaded", "Not downloaded")}
+                    </span>
+                  )}
                 />
               ))}
             </section>
@@ -285,17 +330,30 @@ export default function DownloadsPage() {
                   ? playlist.coverUrls
                   : getTracksForPlaylist(playlist, itemsById).map((item) => item.track.coverUrl).filter(Boolean).slice(0, 4);
                 return (
-                  <PlaylistCard
-                    key={playlist.id}
-                    title={playlist.title}
-                    author={pendingCount > 0
-                      ? t("downloads.playlist_progress", { saved: downloadedCount, pending: pendingCount })
-                      : trackCountLabel(downloadedCount)}
-                    imageUrl={playlist.coverUrl || coverUrls[0] || ""}
-                    coverUrls={coverUrls}
-                    href={openPlaylistHref(playlist.id)}
-                    className="w-full"
-                  />
+                  <div key={playlist.id} className="group relative min-w-0">
+                    <PlaylistCard
+                      title={playlist.title}
+                      author={pendingCount > 0
+                        ? t("downloads.playlist_progress", { saved: downloadedCount, pending: pendingCount })
+                        : text("downloads.playlist_saved_count", "{saved} / {total} downloaded", {
+                            saved: downloadedCount,
+                            total: playlist.trackIds.length,
+                          })}
+                      imageUrl={playlist.coverUrl || coverUrls[0] || ""}
+                      coverUrls={coverUrls}
+                      href={openPlaylistHref(playlist.id)}
+                      className="w-full"
+                    />
+                    <button
+                      type="button"
+                      aria-label={text("downloads.remove_playlist", "Remove playlist download")}
+                      title={text("downloads.remove_playlist", "Remove playlist download")}
+                      onClick={() => void removePlaylist(playlist.id)}
+                      className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full border-0 bg-black/70 text-white opacity-100 shadow-sm transition-opacity hover:bg-black/90 sm:opacity-0 sm:group-hover:opacity-100"
+                    >
+                      <CloseLine size={16} />
+                    </button>
+                  </div>
                 );
               })}
             </div>

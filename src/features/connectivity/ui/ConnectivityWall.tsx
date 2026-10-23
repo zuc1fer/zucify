@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { WifiOffLine, CopyLine, DownloadLine, MailLine, CloseLine } from "@mingcute/react";
 import Button from "@/shared/ui/Button";
 import { useTranslation } from "@/languages";
@@ -22,9 +23,12 @@ function StatusDot({ status }: { status: DiagCheck["status"] }) {
 }
 
 export default function ConnectivityWall() {
+  const navigate = useNavigate();
   const { t } = useTranslation();
   const { toast } = useToast();
   const [showChecks, setShowChecks] = useState(false);
+  const [offline, setOffline] = useState(() => typeof navigator !== "undefined" && !navigator.onLine);
+  const [offlineDismissed, setOfflineDismissed] = useState(false);
   const visible = useConnectivityStore((s) => s.visible);
   const running = useConnectivityStore((s) => s.running);
   const checks = useConnectivityStore((s) => s.checks);
@@ -34,6 +38,24 @@ export default function ConnectivityWall() {
   const retry = useConnectivityStore((s) => s.retry);
   const reset = useConnectivityStore((s) => s.reset);
   const runDiagnostics = useConnectivityStore((s) => s.runDiagnostics);
+
+  useEffect(() => {
+    const handleOffline = () => {
+      setOffline(true);
+      setOfflineDismissed(false);
+    };
+    const handleOnline = () => {
+      setOffline(false);
+      setOfflineDismissed(false);
+      void retry();
+    };
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
+    return () => {
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [retry]);
 
   const dump = useMemo(
     () =>
@@ -46,6 +68,54 @@ export default function ConnectivityWall() {
     [checks, failures, main],
   );
 
+  const showOfflinePrompt = offline && !offlineDismissed;
+  const text = (key: string, fallback: string) => {
+    const value = t(key);
+    return value === key ? fallback : value;
+  };
+
+  if (showOfflinePrompt) {
+    return (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-bg-primary/80 p-5 backdrop-blur-md">
+        <div className="w-full max-w-[420px] rounded-3xl border border-border-alpha-14 bg-bg-panel p-6 shadow-2xl">
+          <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-bg-elevated text-text-secondary">
+            <WifiOffLine size={22} />
+          </span>
+          <h1 className="m-0 text-xl font-semibold text-text-primary">
+            {text("connectivity.offline_downloads_title", "You’re offline")}
+          </h1>
+          <p className="mb-0 mt-2 text-sm leading-relaxed text-text-secondary">
+            {text("connectivity.offline_downloads_message", "Your downloaded music is still available. Go to Downloads?")}
+          </p>
+          <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+            <Button
+              variant="primary"
+              className="!h-11 flex-1 !text-sm"
+              onClick={() => {
+                navigate("/downloads");
+                setOfflineDismissed(true);
+                reset();
+              }}
+            >
+              <DownloadLine size={17} /> {text("connectivity.offline_downloads_open", "Go to Downloads")}
+            </Button>
+            <Button
+              variant="outline"
+              className="!h-11 flex-1 !text-sm"
+              onClick={() => {
+                setOfflineDismissed(true);
+                reset();
+              }}
+            >
+              {text("connectivity.offline_downloads_stay", "Stay here")}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (offline) return null;
   if (!visible) return null;
 
   const okCount = checks.filter((c) => c.status === "ok").length;

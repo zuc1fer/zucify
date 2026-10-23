@@ -1,9 +1,11 @@
 import { create } from "zustand";
 import type { Track } from "@/shared/types";
 import {
+  cacheLyricsForDownloadedTracks,
   downloadTrackForOffline,
   listDownloadedPlaylists,
   listDownloadedTracks,
+  removeDownloadedPlaylist,
   removeDownloadedTrack,
   saveDownloadedPlaylist,
   type DownloadedPlaylist,
@@ -29,6 +31,7 @@ interface DownloadsState {
   refresh: () => Promise<void>;
   enqueue: (tracks: readonly Track[]) => void;
   enqueuePlaylist: (playlist: DownloadedPlaylistInput, tracks: readonly Track[]) => Promise<void>;
+  removePlaylist: (playlistId: string) => Promise<void>;
   cancel: (trackId: string) => void;
   remove: (trackId: string) => Promise<void>;
 }
@@ -121,8 +124,13 @@ export const useDownloadsStore = create<DownloadsState>((set, get) => ({
   },
   enqueue: (tracks) => {
     const jobsToAdd: Record<string, DownloadJob> = {};
+    const existingDownloads: Track[] = [];
     for (const track of tracks) {
-      if (get().downloadedIds.has(track.id) || pendingIds.has(track.id)) continue;
+      if (get().downloadedIds.has(track.id)) {
+        existingDownloads.push(track);
+        continue;
+      }
+      if (pendingIds.has(track.id)) continue;
       const existing = get().jobs[track.id];
       if (existing?.status === "downloading" || existing?.status === "queued") continue;
       pendingIds.add(track.id);
@@ -133,14 +141,36 @@ export const useDownloadsStore = create<DownloadsState>((set, get) => ({
       set((state) => ({ jobs: { ...state.jobs, ...jobsToAdd } }));
       startQueue(get, set);
     }
+    if (existingDownloads.length > 0) {
+      void cacheLyricsForDownloadedTracks(existingDownloads);
+    }
   },
   enqueuePlaylist: async (playlist, tracks) => {
-    const savedPlaylist = await saveDownloadedPlaylist(playlist);
-    set((state) => ({
-      playlists: [savedPlaylist, ...state.playlists.filter((item) => item.id !== savedPlaylist.id)]
-        .sort((a, b) => b.downloadedAt - a.downloadedAt),
-    }));
+    await saveDownloadedPlaylist(playlist);
+    const [items, playlists] = await Promise.all([
+      listDownloadedTracks(),
+      listDownloadedPlaylists(),
+    ]);
+    set({ items, playlists, downloadedIds: new Set(items.map((item) => item.track.id)) });
     get().enqueue(tracks);
+  },
+  removePlaylist: async (playlistId) => {
+    const playlist = get().playlists.find((item) => item.id === playlistId);
+    if (!playlist) return;
+    const remainingTrackIds = new Set(
+      get().playlists
+        .filter((item) => item.id !== playlistId)
+        .flatMap((item) => item.trackIds),
+    );
+    for (const trackId of playlist.trackIds) {
+      if (!remainingTrackIds.has(trackId)) get().cancel(trackId);
+    }
+    await removeDownloadedPlaylist(playlistId);
+    const [items, playlists] = await Promise.all([
+      listDownloadedTracks(),
+      listDownloadedPlaylists(),
+    ]);
+    set({ items, playlists, downloadedIds: new Set(items.map((item) => item.track.id)) });
   },
   cancel: (trackId) => {
     controllers.get(trackId)?.abort();

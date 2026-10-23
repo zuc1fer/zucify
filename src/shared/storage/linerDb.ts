@@ -33,6 +33,8 @@ export interface DownloadedPlaylistRecord {
   coverUrl: string;
   coverUrls: string[];
   trackIds: string[];
+  /** Track metadata snapshot used to render the offline playlist without API access. */
+  tracks?: Track[];
   downloadedAt: number;
 }
 
@@ -410,6 +412,7 @@ class LinerDb {
       ...playlist,
       coverUrls: [...playlist.coverUrls],
       trackIds: [...new Set(playlist.trackIds)],
+      ...(playlist.tracks ? { tracks: [...playlist.tracks] } : {}),
     };
     this.memDownloadedPlaylists.set(record.id, record);
     await this.runTransaction("downloadedPlaylists", "readwrite", (store) => {
@@ -417,6 +420,17 @@ class LinerDb {
         const request = store.put(record);
         request.onsuccess = () => resolve();
         request.onerror = () => reject(request.error);
+      });
+    });
+  }
+
+  async deleteDownloadedPlaylist(playlistId: string): Promise<void> {
+    this.memDownloadedPlaylists.delete(playlistId);
+    await this.runTransaction("downloadedPlaylists", "readwrite", (store) => {
+      return new Promise<void>((resolve) => {
+        const request = store.delete(playlistId);
+        request.onsuccess = () => resolve();
+        request.onerror = () => resolve();
       });
     });
   }

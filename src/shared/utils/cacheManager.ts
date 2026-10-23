@@ -157,18 +157,21 @@ async function getCoverCacheBytes(): Promise<{ bytes: number; count: number }> {
     return { bytes: 0, count: 0 };
   }
   try {
-    const hasCovers = await window.caches.has("liner-covers-v2");
-    if (!hasCovers) return { bytes: 0, count: 0 };
-    const cache = await window.caches.open("liner-covers-v2");
-    const requests = await cache.keys();
-    const count = requests.length;
+    const cacheNames = ["liner-covers-v2", "zucify-offline-covers-v1"];
+    const entries = (await Promise.all(cacheNames.map(async (name) => {
+      if (!(await window.caches.has(name))) return [];
+      const cache = await window.caches.open(name);
+      return (await cache.keys()).map((request) => ({ cache, request }));
+    }))).flat();
+    const count = entries.length;
     if (count === 0) return { bytes: 0, count: 0 };
 
     // sample up to 20 entries to avoid main thread jank with large catalogs
     const sampleLimit = Math.min(count, 20);
     let sampleBytes = 0;
     for (let i = 0; i < sampleLimit; i++) {
-      const resp = await cache.match(requests[i]);
+      const { cache, request } = entries[i];
+      const resp = await cache.match(request);
       if (resp) {
         const cl = resp.headers.get("content-length");
         if (cl) {

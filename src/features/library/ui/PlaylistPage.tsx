@@ -16,6 +16,7 @@ import {
   ShareForwardLine,
   Search2Line,
   DownloadLine,
+  DownloadFill,
 } from "@mingcute/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { LuPencil, LuTrash2, LuText, LuShuffle } from "react-icons/lu";
@@ -75,6 +76,8 @@ interface TrackItemProps {
   socialOnly?: boolean;
   playDisabled?: boolean;
   reactionDisabled?: boolean;
+  offlinePlaylist?: boolean;
+  trackDownloaded?: boolean;
   onReaction?: (item: SharedPlaylistTrack, emoji: TrackReactionEmoji, reacted: boolean) => void;
 }
 
@@ -95,6 +98,8 @@ const TrackItem = memo(function TrackItem({
   socialOnly = false,
   playDisabled = false,
   reactionDisabled = false,
+  offlinePlaylist = false,
+  trackDownloaded = false,
   onReaction,
 }: TrackItemProps) {
   const handlePlay = useCallback(() => {
@@ -133,13 +138,24 @@ const TrackItem = memo(function TrackItem({
         }
         durationMs={track.durationMs}
         explicit={track.explicit}
-        rightContent={socialTrack || playDisabled ? (
+        rightContent={socialTrack || playDisabled || offlinePlaylist ? (
           <div
-            className="flex flex-col items-end justify-center gap-[1px]"
+            className="flex flex-col items-end justify-center gap-[3px]"
             data-prevent-drag
             onClick={(event) => event.stopPropagation()}
           >
-            {playDisabled && <span className="text-[9px] leading-none text-text-tertiary" title="This song was added after the party started">Next party</span>}
+            <div className="flex items-center gap-2">
+              {playDisabled && <span className="text-[9px] leading-none text-text-tertiary" title="This song was added after the party started">Next party</span>}
+              {offlinePlaylist && (
+                <span
+                  className={`inline-flex items-center gap-1 text-[10px] leading-none ${trackDownloaded ? "text-emerald-400" : "text-text-tertiary"}`}
+                  title={trackDownloaded ? "Downloaded for offline listening" : "Not downloaded for offline listening"}
+                  aria-label={trackDownloaded ? "Downloaded for offline listening" : "Not downloaded for offline listening"}
+                >
+                  {trackDownloaded ? <DownloadFill size={13} /> : <DownloadLine size={13} />}
+                </span>
+              )}
+            </div>
             {socialTrack && <>
               <span className="max-w-[140px] truncate text-[10px] leading-none text-text-tertiary">
                 Added by {addedByName || "a friend"}
@@ -486,6 +502,10 @@ function LibraryPlaylistContent() {
   const downloadedTrackIds = useDownloadsStore((state) => state.downloadedIds);
   const downloadedPlaylists = useDownloadsStore((state) => state.playlists);
   const enqueueDownloadedPlaylist = useDownloadsStore((state) => state.enqueuePlaylist);
+  const refreshDownloads = useDownloadsStore((state) => state.refresh);
+  useEffect(() => {
+    void refreshDownloads();
+  }, [refreshDownloads]);
   const offlinePlaylistId = isLikesMode
     ? "special:liked-songs"
     : isSharedMode && socialPlaylistId
@@ -494,6 +514,12 @@ function LibraryPlaylistContent() {
         ? `source:${decodedId}`
         : null;
   const isPlaylistSavedOffline = downloadedPlaylists.some((playlist) => playlist.id === offlinePlaylistId);
+  const savedOfflinePlaylist = downloadedPlaylists.find((playlist) => playlist.id === offlinePlaylistId);
+  const offlinePlaylistNeedsUpdate = Boolean(
+    savedOfflinePlaylist &&
+    (savedOfflinePlaylist.trackIds.length !== currentTracks.length ||
+      savedOfflinePlaylist.trackIds.some((trackId, index) => trackId !== currentTracks[index]?.id)),
+  );
   const [addedToQueue, setAddedToQueue] = useState(false);
 
   const handleDownloadPlaylist = useCallback(() => {
@@ -505,6 +531,7 @@ function LibraryPlaylistContent() {
       coverUrl: viewData.coverUrl,
       coverUrls: viewData.coverUrls,
       trackIds: currentTracks.map((track) => track.id),
+      tracks: currentTracks,
     }, currentTracks);
     toast(
       tracksToQueue.length > 0 ? t("downloads.added_playlist") : t("downloads.playlist_saved"),
@@ -1147,9 +1174,9 @@ function LibraryPlaylistContent() {
                         <Button
                           variant={hasCustomBg ? "glass-action" : "outline"}
                           onClick={handleDownloadPlaylist}
-                          disabled={currentTracks.length === 0 || (isPlaylistSavedOffline && currentTracks.every((track) => downloadedTrackIds.has(track.id)))}
+                          disabled={currentTracks.length === 0 || (isPlaylistSavedOffline && !offlinePlaylistNeedsUpdate && currentTracks.every((track) => downloadedTrackIds.has(track.id)))}
                           className="!h-[36px] !w-[36px] shrink-0 !p-0 flex items-center justify-center text-text-primary max-md:!h-11 max-md:!w-11"
-                          title={isPlaylistSavedOffline ? t("downloads.playlist_saved") : t("downloads.save_playlist")}
+                          title={isPlaylistSavedOffline ? "Update offline playlist" : t("downloads.save_playlist")}
                         >
                           <DownloadLine size={16} />
                         </Button>
@@ -1465,6 +1492,8 @@ function LibraryPlaylistContent() {
                       isSocialAdded={isSocialAdded}
                       socialOnly={isSharedMode}
                       playDisabled={playDisabled}
+                      offlinePlaylist={isPlaylistSavedOffline}
+                      trackDownloaded={downloadedTrackIds.has(track.id)}
                       reactionDisabled={socialBusy}
                       onReaction={handleTrackReaction}
                       highlight={search.activeQuery || undefined}

@@ -261,6 +261,11 @@
     "added_playlist": "Playlist added to download queue",
     "playlist_saved": "Playlist saved for offline listening",
     "playlist_progress": "{saved} saved · {pending} in progress",
+    "playlist_saved_count": "{saved} / {total} downloaded",
+    "tracks_not_downloaded": "{count} not downloaded",
+    "downloaded_for_offline": "Downloaded for offline listening",
+    "not_downloaded": "Not downloaded",
+    "remove_playlist": "Remove playlist download",
     "tracks_queued": "tracks added",
     "save_playlist": "Download playlist",
     "empty_title": "No downloads yet",
@@ -1008,6 +1013,10 @@
     "sign_out": "Sign out"
   },
   "connectivity": {
+    "offline_downloads_title": "You’re offline",
+    "offline_downloads_message": "Your downloaded music is still available. Go to Downloads?",
+    "offline_downloads_open": "Go to Downloads",
+    "offline_downloads_stay": "Stay here",
     "wall_title": "Connection failed",
     "wall_subtitle": "Liner can't reach its servers. Your music and library are safe.",
     "wall_title_server": "Liner's servers are having trouble",
