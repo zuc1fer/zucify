@@ -24,6 +24,7 @@ export interface CachedAudioRecord {
   byteSize: number;
   savedAt: number;
   lastPlayedAt?: number;
+  downloadedAt?: number;
 }
 
 export interface CachedLyricsRecord {
@@ -49,7 +50,7 @@ export interface CachedArtistRecord {
 }
 
 const DB_NAME = "liner_db_v1";
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 const MEM_AUDIO_LIMIT = 3;
 
@@ -96,10 +97,14 @@ class LinerDb {
           audioStore.createIndex("savedAt", "savedAt", { unique: false });
           audioStore.createIndex("byteSize", "byteSize", { unique: false });
           audioStore.createIndex("lastPlayedAt", "lastPlayedAt", { unique: false });
+          audioStore.createIndex("downloadedAt", "downloadedAt", { unique: false });
         } else {
           const audioStore = request.transaction?.objectStore("audio");
           if (audioStore && !audioStore.indexNames.contains("lastPlayedAt")) {
             audioStore.createIndex("lastPlayedAt", "lastPlayedAt", { unique: false });
+          }
+          if (audioStore && !audioStore.indexNames.contains("downloadedAt")) {
+            audioStore.createIndex("downloadedAt", "downloadedAt", { unique: false });
           }
         }
 
@@ -286,8 +291,14 @@ class LinerDb {
     return this.memAudio.get(trackId) || null;
   }
 
-  async putAudio(trackId: string, blob: Blob, mimeType: string, lastPlayedAt?: number): Promise<void> {
-    const existing = this.memAudio.get(trackId);
+  async putAudio(
+    trackId: string,
+    blob: Blob,
+    mimeType: string,
+    lastPlayedAt?: number,
+    downloadedAt?: number,
+  ): Promise<void> {
+    const existing = await this.getAudio(trackId);
     const now = Date.now();
     const record: CachedAudioRecord = {
       trackId,
@@ -296,6 +307,9 @@ class LinerDb {
       byteSize: blob.size,
       savedAt: existing?.savedAt ?? now,
       lastPlayedAt: lastPlayedAt ?? now,
+      ...(downloadedAt ?? existing?.downloadedAt
+        ? { downloadedAt: downloadedAt ?? existing?.downloadedAt }
+        : {}),
     };
     this.rememberAudio(trackId, record);
 
@@ -306,6 +320,50 @@ class LinerDb {
         req.onerror = () => reject(req.error);
       });
     });
+  }
+
+  async markAudioDownloaded(trackId: string, downloadedAt = Date.now()): Promise<CachedAudioRecord | null> {
+    const record = await this.getAudio(trackId);
+    if (!record) return null;
+    record.downloadedAt = downloadedAt;
+    this.rememberAudio(trackId, record);
+    await this.runTransaction("audio", "readwrite", (store) => {
+      return new Promise<void>((resolve) => {
+        const req = store.put(record);
+        req.onsuccess = () => resolve();
+        req.onerror = () => resolve();
+      });
+    });
+    return record;
+  }
+
+  async getDownloadedAudioRecords(): Promise<CachedAudioRecord[]> {
+    const result = await this.runTransaction("audio", "readonly", (store) => {
+      return new Promise<CachedAudioRecord[]>((resolve) => {
+        if (!store.indexNames.contains("downloadedAt")) {
+          resolve([]);
+          return;
+        }
+        const records: CachedAudioRecord[] = [];
+        const request = store.index("downloadedAt").openCursor(IDBKeyRange.lowerBound(1));
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (cursor) {
+            records.push(cursor.value as CachedAudioRecord);
+            cursor.continue();
+          } else {
+            records.sort((a, b) => (b.downloadedAt ?? 0) - (a.downloadedAt ?? 0));
+            resolve(records);
+          }
+        };
+        request.onerror = () => resolve([]);
+      });
+    });
+
+    if (result !== null && result !== undefined) return result;
+    return Array.from(this.memAudio.values())
+      .filter((record) => Boolean(record.downloadedAt))
+      .sort((a, b) => (b.downloadedAt ?? 0) - (a.downloadedAt ?? 0));
   }
 
   async touchAudio(trackId: string): Promise<void> {

@@ -19,7 +19,7 @@ export default function MobileNavigation() {
   return (
     <nav
       aria-label="Main navigation"
-      className="relative z-[45] grid shrink-0 grid-cols-4 border-t border-border-primary/60 bg-bg-primary/95 backdrop-blur-xl md:hidden"
+      className="relative z-[45] grid shrink-0 grid-cols-5 border-t border-border-primary/60 bg-bg-primary/95 backdrop-blur-xl md:hidden"
       style={
         Capacitor.isNativePlatform()
           ? {

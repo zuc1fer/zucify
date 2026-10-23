@@ -49,6 +49,28 @@ describe("linerDb storage layer", () => {
     expect(hasAudioAfter).toBe(false);
   });
 
+  it("keeps offline downloads marked when playback refreshes their cached audio", async () => {
+    await audioCache.saveAudioBlob("downloaded-track", new Blob(["offline audio data"], { type: "audio/webm" }), "audio/webm", undefined, true);
+    const first = await linerDb.getAudio("downloaded-track");
+    expect(first?.downloadedAt).toBeTypeOf("number");
+
+    await linerDb.putAudio("downloaded-track", new Blob(["refreshed audio"], { type: "audio/webm" }), "audio/webm");
+
+    const records = await linerDb.getDownloadedAudioRecords();
+    expect(records.map((record) => record.trackId)).toContain("downloaded-track");
+    expect((await linerDb.getAudio("downloaded-track"))?.downloadedAt).toBe(first?.downloadedAt);
+  });
+
+  it("does not evict saved downloads when enforcing the audio cache limit", async () => {
+    await audioCache.saveAudioBlob("pinned-audio", new Blob(["download"], { type: "audio/webm" }), "audio/webm", undefined, true);
+    await audioCache.saveAudioBlob("temporary-audio", new Blob(["cache"], { type: "audio/webm" }));
+
+    await audioCache.enforceCacheLimit(2);
+
+    expect(await linerDb.hasAudio("pinned-audio")).toBe(true);
+    expect(await linerDb.hasAudio("temporary-audio")).toBe(false);
+  });
+
   it("stores lyrics and updates weekly checked timestamp", async () => {
     const initialTime = Date.now() - 10000;
     await linerDb.putLyrics({

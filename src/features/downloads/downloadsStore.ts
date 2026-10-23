@@ -1,0 +1,147 @@
+import { create } from "zustand";
+import type { Track } from "@/shared/types";
+import {
+  downloadTrackForOffline,
+  listDownloadedTracks,
+  removeDownloadedTrack,
+  type DownloadedTrack,
+} from "./downloadService";
+
+export type DownloadJobStatus = "queued" | "downloading" | "failed";
+
+export interface DownloadJob {
+  track: Track;
+  status: DownloadJobStatus;
+  progress: number;
+  error?: string;
+}
+
+interface DownloadsState {
+  items: DownloadedTrack[];
+  downloadedIds: Set<string>;
+  jobs: Record<string, DownloadJob>;
+  isLoading: boolean;
+  refresh: () => Promise<void>;
+  enqueue: (tracks: readonly Track[]) => void;
+  cancel: (trackId: string) => void;
+  remove: (trackId: string) => Promise<void>;
+}
+
+const queue: Track[] = [];
+const pendingIds = new Set<string>();
+const controllers = new Map<string, AbortController>();
+let queueIsRunning = false;
+
+function updateJob(
+  set: (updater: (state: DownloadsState) => Partial<DownloadsState>) => void,
+  trackId: string,
+  update: Partial<DownloadJob> | null,
+): void {
+  set((state) => {
+    const jobs = { ...state.jobs };
+    if (update) jobs[trackId] = { ...jobs[trackId], ...update };
+    else delete jobs[trackId];
+    return { jobs };
+  });
+}
+
+function startQueue(
+  get: () => DownloadsState,
+  set: (updater: (state: DownloadsState) => Partial<DownloadsState>) => void,
+): void {
+  if (queueIsRunning) return;
+  queueIsRunning = true;
+
+  void (async () => {
+    while (queue.length > 0) {
+      const track = queue.shift()!;
+      pendingIds.delete(track.id);
+      if (get().jobs[track.id]?.status !== "queued") continue;
+
+      const controller = new AbortController();
+      controllers.set(track.id, controller);
+      updateJob(set, track.id, { status: "downloading", progress: 0 });
+      try {
+        const downloaded = await downloadTrackForOffline(track, controller.signal, (received, total) => {
+          updateJob(set, track.id, {
+            progress: total && total > 0 ? Math.min(99, Math.floor((received / total) * 100)) : 0,
+          });
+        });
+        set((state) => {
+          const items = [downloaded, ...state.items.filter((item) => item.track.id !== track.id)]
+            .sort((a, b) => b.downloadedAt - a.downloadedAt);
+          const downloadedIds = new Set(state.downloadedIds);
+          downloadedIds.add(track.id);
+          const jobs = { ...state.jobs };
+          delete jobs[track.id];
+          return { items, downloadedIds, jobs };
+        });
+      } catch (error) {
+        if (controller.signal.aborted) {
+          updateJob(set, track.id, null);
+        } else {
+          updateJob(set, track.id, {
+            status: "failed",
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      } finally {
+        controllers.delete(track.id);
+      }
+    }
+  })().finally(() => {
+    queueIsRunning = false;
+    if (queue.length > 0) startQueue(get, set);
+  });
+}
+
+export const useDownloadsStore = create<DownloadsState>((set, get) => ({
+  items: [],
+  downloadedIds: new Set(),
+  jobs: {},
+  isLoading: false,
+  refresh: async () => {
+    set({ isLoading: true });
+    try {
+      const items = await listDownloadedTracks();
+      set({ items, downloadedIds: new Set(items.map((item) => item.track.id)) });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+  enqueue: (tracks) => {
+    const jobsToAdd: Record<string, DownloadJob> = {};
+    for (const track of tracks) {
+      if (get().downloadedIds.has(track.id) || pendingIds.has(track.id)) continue;
+      const existing = get().jobs[track.id];
+      if (existing?.status === "downloading" || existing?.status === "queued") continue;
+      pendingIds.add(track.id);
+      queue.push(track);
+      jobsToAdd[track.id] = { track, status: "queued", progress: 0 };
+    }
+    if (Object.keys(jobsToAdd).length > 0) {
+      set((state) => ({ jobs: { ...state.jobs, ...jobsToAdd } }));
+      startQueue(get, set);
+    }
+  },
+  cancel: (trackId) => {
+    controllers.get(trackId)?.abort();
+    pendingIds.delete(trackId);
+    for (let index = queue.length - 1; index >= 0; index -= 1) {
+      if (queue[index]?.id === trackId) queue.splice(index, 1);
+    }
+    updateJob(set, trackId, null);
+  },
+  remove: async (trackId) => {
+    get().cancel(trackId);
+    await removeDownloadedTrack(trackId);
+    set((state) => {
+      const downloadedIds = new Set(state.downloadedIds);
+      downloadedIds.delete(trackId);
+      return {
+        items: state.items.filter((item) => item.track.id !== trackId),
+        downloadedIds,
+      };
+    });
+  },
+}));

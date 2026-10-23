@@ -7,12 +7,14 @@ import CollectionPage from "@/features/collection/ui/CollectionPage";
 import LoginPage from "@/features/auth/ui/LoginPage";
 import PlayerPage from "@/features/player/ui/FullscreenPlayer";
 import FriendsPage from "@/features/friends/ui/FriendsPage";
+import DownloadsPage from "@/features/downloads/ui/DownloadsPage";
 
 export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/library" element={<LibraryPage />} />
+      <Route path="/downloads" element={<DownloadsPage />} />
       <Route path="/friends" element={<FriendsPage />} />
       <Route path="/library/playlist" element={<PlaylistPage />} />
       <Route path="/artist" element={<ArtistPage />} />

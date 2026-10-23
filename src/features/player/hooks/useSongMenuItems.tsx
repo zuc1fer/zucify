@@ -7,6 +7,7 @@ import {
   LuPlus,
   LuTrash2,
   LuFolderPlus,
+  LuDownload,
 } from "react-icons/lu";
 import type { DropdownMenuItem } from "@/shared/ui/DropdownMenu";
 import { playerEngine } from "../engine/playerEngine";
@@ -19,6 +20,7 @@ import {
 } from "@/features/library";
 import { useTranslation } from "@/languages";
 import { showToast } from "@/shared/ui";
+import { useDownloadsStore } from "@/features/downloads/downloadsStore";
 
 export interface SongMenuContext {
   id?: string;
@@ -56,6 +58,8 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
   const unlikeMutation = useUnlikeTrack();
 
   const liked = useIsTrackLiked(id);
+  const isDownloaded = useDownloadsStore((state) => Boolean(id && state.downloadedIds.has(id)));
+  const downloadJobStatus = useDownloadsStore((state) => state.jobs[id ?? ""]?.status);
 
   const handleLike = useCallback(async () => {
     if (!id) return;
@@ -70,6 +74,38 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
     const isTrack = searchType === "track" || !searchType;
 
     if (isTrack) {
+      const downloadItem: DropdownMenuItem = {
+        id: isDownloaded ? "remove-download" : "download-track",
+        label: isDownloaded
+          ? t("downloads.remove")
+          : downloadJobStatus === "queued"
+            ? t("downloads.queued")
+            : downloadJobStatus === "downloading"
+              ? t("downloads.downloading")
+              : downloadJobStatus === "failed"
+                ? t("downloads.retry")
+                : t("downloads.save_offline"),
+        icon: <LuDownload size={15} />,
+        disabled: !isDownloaded && (downloadJobStatus === "queued" || downloadJobStatus === "downloading"),
+        onClick: () => {
+          if (!id) return;
+          if (isDownloaded) {
+            void useDownloadsStore.getState().remove(id);
+            showToast(t("downloads.removed"), "info", { description: title });
+            return;
+          }
+          useDownloadsStore.getState().enqueue([{
+            id,
+            title,
+            artists,
+            coverUrl,
+            durationMs: durationMs ?? 0,
+            playCount: 0,
+          }]);
+          showToast(t("downloads.added"), "info", { description: title });
+        },
+      };
+
       if (playlistId) {
         return [
           {
@@ -123,6 +159,7 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
               });
             },
           },
+          downloadItem,
           {
             id: liked ? "unlike-track" : "like-track",
             label: liked ? t("common.unlike") : t("common.like"),
@@ -207,6 +244,7 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
             });
           },
         },
+        downloadItem,
         {
           id: liked ? "unlike-track" : "like-track",
           label: liked ? t("common.unlike") : t("common.like"),
@@ -270,6 +308,8 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
     liked,
     handleLike,
     playlistsData,
+    isDownloaded,
+    downloadJobStatus,
     t,
   ]);
 

@@ -1,4 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+const { isNativePlatform, nativeGet } = vi.hoisted(() => ({
+  isNativePlatform: vi.fn(() => false),
+  nativeGet: vi.fn(),
+}));
+
+vi.mock("@capacitor/core", () => ({
+  Capacitor: { isNativePlatform },
+  CapacitorHttp: { get: nativeGet },
+}));
+
 import { downloadAudioBytes } from "./chunkedAudioDownload";
 
 const STREAM_URL = "https://rr1---sn-abc.googlevideo.com/videoplayback?expire=1&itag=251";
@@ -20,6 +31,9 @@ function rangeServer(failFirstFor?: string) {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  isNativePlatform.mockReset();
+  isNativePlatform.mockReturnValue(false);
+  nativeGet.mockReset();
 });
 
 describe("downloadAudioBytes", () => {
@@ -30,6 +44,27 @@ describe("downloadAudioBytes", () => {
     expect(bytes).toEqual(source);
     const ranges = fetchSpy.mock.calls.map(([input]) => new URL(String(input)).searchParams.get("range")).sort();
     expect(ranges).toEqual(["0-999", "1000-1999", "2000-2499"]);
+  });
+
+  it("uses Capacitor HTTP and decodes native range responses on mobile", async () => {
+    isNativePlatform.mockReturnValue(true);
+    nativeGet.mockImplementation(async ({ url }: { url: string }) => {
+      const [start, end] = new URL(url).searchParams.get("range")!.split("-").map(Number);
+      const bytes = source.slice(start, end + 1);
+      return { status: 206, data: btoa(String.fromCharCode(...bytes)) };
+    });
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const progress: number[] = [];
+
+    await expect(downloadAudioBytes(STREAM_URL, {
+      contentLength: source.length,
+      chunkSize: 1000,
+      onProgress: (received) => progress.push(received),
+    })).resolves.toEqual(source);
+
+    expect(nativeGet).toHaveBeenCalledTimes(3);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(progress.at(-1)).toBe(source.length);
   });
 
   it("retries a failed chunk once", async () => {

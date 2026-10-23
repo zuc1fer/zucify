@@ -15,6 +15,7 @@ import {
   ArrowLeftLine,
   ShareForwardLine,
   Search2Line,
+  DownloadLine,
 } from "@mingcute/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { LuPencil, LuTrash2, LuText, LuShuffle } from "react-icons/lu";
@@ -39,6 +40,7 @@ import { useIsContentTransparent } from "@/features/settings/store/customization
 import { useAuthStore } from "@/features/auth";
 import { connectListeningRoom, getListeningRoom, leaveListeningRoom, subscribeListeningRoom, type ListeningRoomSnapshot } from "@/features/friends/listeningRoom";
 import TrackReactions from "@/features/friends/ui/TrackReactions";
+import { useDownloadsStore } from "@/features/downloads/downloadsStore";
 import ListeningNow from "@/features/friends/ui/ListeningNow";
 import {
   isSocialApiConfigured,
@@ -481,7 +483,18 @@ function LibraryPlaylistContent() {
   }, [currentTracks, viewData, decodedId, playlistPartyActive]);
 
   const { toast } = useToast();
+  const enqueueDownloads = useDownloadsStore((state) => state.enqueue);
+  const downloadedTrackIds = useDownloadsStore((state) => state.downloadedIds);
   const [addedToQueue, setAddedToQueue] = useState(false);
+
+  const handleDownloadPlaylist = useCallback(() => {
+    const remainingTracks = currentTracks.filter((track) => !downloadedTrackIds.has(track.id));
+    if (remainingTracks.length === 0) return;
+    enqueueDownloads(remainingTracks);
+    toast(t("downloads.added_playlist"), "info", {
+      description: `${remainingTracks.length} ${t("downloads.tracks_queued")}`,
+    });
+  }, [currentTracks, downloadedTrackIds, enqueueDownloads, toast, t]);
 
   const handleMakeCollaborative = useCallback(async () => {
     if (isSharedMode || !decodedId || !playlistDetail || !viewData || socialBusy) return;
@@ -1110,6 +1123,16 @@ function LibraryPlaylistContent() {
                           title={playlistPartyActive ? "The party playlist order is fixed" : t("common.shuffle")}
                         >
                           <LuShuffle size={16} />
+                        </Button>
+
+                        <Button
+                          variant={hasCustomBg ? "glass-action" : "outline"}
+                          onClick={handleDownloadPlaylist}
+                          disabled={currentTracks.length === 0 || currentTracks.every((track) => downloadedTrackIds.has(track.id))}
+                          className="!h-[36px] !w-[36px] shrink-0 !p-0 flex items-center justify-center text-text-primary max-md:!h-11 max-md:!w-11"
+                          title={t("downloads.save_playlist")}
+                        >
+                          <DownloadLine size={16} />
                         </Button>
 
                         <Button

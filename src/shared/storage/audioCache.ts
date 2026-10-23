@@ -53,7 +53,7 @@ class AudioCache {
     const bytesToEvict = totalBytes - targetBytes;
     let evictedBytes = 0;
 
-    const oldest = await linerDb.getOldestAudioRecords();
+    const oldest = (await linerDb.getOldestAudioRecords()).filter((item) => !item.downloadedAt);
     for (const item of oldest) {
       if (evictedBytes >= bytesToEvict) break;
       const size = item.byteSize || item.blob?.size || 0;
@@ -89,9 +89,10 @@ class AudioCache {
     blob: Blob,
     mimeType: string = "audio/ogg",
     generation?: number,
+    downloaded: boolean = false,
   ): Promise<boolean> {
     if (generation !== undefined && generation !== this.generation) return false;
-    await linerDb.putAudio(trackId, blob, mimeType);
+    await linerDb.putAudio(trackId, blob, mimeType, undefined, downloaded ? Date.now() : undefined);
     await this.enforceCacheLimit();
     return true;
   }

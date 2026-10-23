@@ -61,6 +61,7 @@ import { SettingsModal, useCustomizationStore, getBlockStyle } from "@/features/
 import { UpdateModal, UpdateToastBridge } from "@/features/updater";
 import { closeTopDialog } from "@/shared/ui/Dialog";
 import { resolveAndroidBackAction } from "../utils/androidBackAction";
+import { useDownloadsStore } from "@/features/downloads/downloadsStore";
 
 
 interface AppFrameProps {
@@ -88,6 +89,7 @@ export default function AppFrame({ children }: AppFrameProps) {
   const closeSearch = useModalStore((state) => state.closeSearch);
   const toggleSearch = useModalStore((state) => state.toggleSearch);
   const openSettings = useModalStore((state) => state.openSettings);
+  const refreshDownloads = useDownloadsStore((state) => state.refresh);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [queuePopupOpen, setQueuePopupOpen] = useState(false);
@@ -112,6 +114,10 @@ export default function AppFrame({ children }: AppFrameProps) {
       localStorage.removeItem(key);
     }
   }, []);
+
+  useEffect(() => {
+    void refreshDownloads();
+  }, [refreshDownloads]);
 
   const handleQueuePopupToggle = useCallback((open: boolean) => {
     setQueuePopupOpen(open);

@@ -51,6 +51,7 @@
       "home": "Home",
       "search": "Search",
       "library": "Library",
+      "downloads": "Downloads",
       "friends": "Friends",
       "settings": "Settings"
     },
@@ -236,6 +237,28 @@
     "no_artists_title": "No saved artists",
     "no_artists_desc": "Save artists to quickly access their discography",
     "search_music": "Search music"
+  },
+  "downloads": {
+    "title": "Downloads",
+    "subtitle": "Keep music on this device for offline listening.",
+    "song_count": "{count} tracks saved offline",
+    "play_all": "Play downloads",
+    "saved_songs": "Saved songs",
+    "in_progress": "In progress",
+    "queued": "Waiting in download queue",
+    "downloading": "Downloading…",
+    "failed": "Download failed",
+    "retry": "Retry download",
+    "save_offline": "Download for offline",
+    "remove": "Remove download",
+    "removed": "Removed offline copy",
+    "added": "Added to download queue",
+    "added_playlist": "Playlist added to download queue",
+    "tracks_queued": "tracks added",
+    "save_playlist": "Download playlist",
+    "empty_title": "No downloads yet",
+    "empty_desc": "Save songs from a track menu or download a playlist to listen without an internet connection.",
+    "find_music": "Find music"
   },
   "login": {
     "welcome_back": "Welcome back",
