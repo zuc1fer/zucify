@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  '@capgo/capacitor-media-session@8.1.5': 04bddcd6d8a3c7dbc89c8f930eea31c5e8d529a6feaa7033ef7ce5762dc3c762
+  '@capgo/capacitor-media-session@8.1.5': 2a998427ba343e727bb038681cc3553bf09d2a4ca811c28fc8897bb175a5f103
 
 importers:
 
@@ -31,7 +31,7 @@ importers:
         version: 8.5.3(@capacitor/core@8.5.3)
       '@capgo/capacitor-media-session':
         specifier: ^8.1.5
-        version: 8.1.5(patch_hash=04bddcd6d8a3c7dbc89c8f930eea31c5e8d529a6feaa7033ef7ce5762dc3c762)(@capacitor/core@8.5.3)
+        version: 8.1.5(patch_hash=2a998427ba343e727bb038681cc3553bf09d2a4ca811c28fc8897bb175a5f103)(@capacitor/core@8.5.3)
       '@mingcute/react':
         specifier: ^1.4.1
         version: 1.4.1(react@19.2.4)
@@ -2823,7 +2823,7 @@ snapshots:
     dependencies:
       '@capacitor/core': 8.5.3
 
-  '@capgo/capacitor-media-session@8.1.5(patch_hash=04bddcd6d8a3c7dbc89c8f930eea31c5e8d529a6feaa7033ef7ce5762dc3c762)(@capacitor/core@8.5.3)':
+  '@capgo/capacitor-media-session@8.1.5(patch_hash=2a998427ba343e727bb038681cc3553bf09d2a4ca811c28fc8897bb175a5f103)(@capacitor/core@8.5.3)':
     dependencies:
       '@capacitor/core': 8.5.3
 

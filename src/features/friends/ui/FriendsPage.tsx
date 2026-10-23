@@ -429,7 +429,7 @@ export default function FriendsPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-[22px] px-[clamp(18px,4vw,42px)] py-[34px] pb-[50px]">
+      <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-[22px] px-[clamp(18px,4vw,42px)] py-[34px] pb-[50px] max-md:pt-[calc(env(safe-area-inset-top)+24px)] max-md:pb-28">
         <header className="flex flex-wrap items-end justify-between gap-[18px]">
           <div>
             <div className="mb-[7px] flex items-center gap-[10px] text-text-secondary"><GroupFill size={24} /><span className="text-[12px] uppercase tracking-[0.12em]">Zucify</span></div>

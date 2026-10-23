@@ -147,4 +147,15 @@ export function useMobileMediaSession(): void {
     const interval = window.setInterval(updatePosition, 1000);
     return () => window.clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    void MediaSession.setShuffleState({ enabled: player.shuffle }).catch((error) => {
+      console.warn("[MobileMediaSession] Could not update shuffle state:", error);
+    });
+    void MediaSession.setRepeatMode({ mode: player.repeat }).catch((error) => {
+      console.warn("[MobileMediaSession] Could not update repeat mode:", error);
+    });
+  }, [player.shuffle, player.repeat]);
 }

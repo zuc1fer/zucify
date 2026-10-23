@@ -185,7 +185,7 @@ export default function DownloadsPage() {
 
     return (
       <div className="h-full w-full overflow-y-auto bg-transparent pb-24">
-        <header className="px-8 pb-5 pt-7 max-md:px-4 max-md:pb-4 max-md:pt-5">
+        <header className="px-8 pb-5 pt-7 max-md:px-4 max-md:pb-4 max-md:pt-[calc(env(safe-area-inset-top)+20px)]">
           <button
             type="button"
             onClick={() => navigate("/downloads", { replace: true })}
@@ -278,7 +278,7 @@ export default function DownloadsPage() {
 
   return (
     <div className="h-full w-full overflow-y-auto bg-transparent pb-24">
-      <header className="flex flex-wrap items-end justify-between gap-4 px-8 pb-5 pt-7 max-md:px-4 max-md:pb-4 max-md:pt-5">
+      <header className="flex flex-wrap items-end justify-between gap-4 px-8 pb-5 pt-7 max-md:px-4 max-md:pb-4 max-md:pt-[calc(env(safe-area-inset-top)+20px)]">
         <div className="min-w-0">
           <h1 className="m-0 text-[26px] font-bold tracking-tight text-text-primary max-md:text-[22px]">{t("downloads.title")}</h1>
           <p className="mb-0 mt-1 text-[13px] text-text-tertiary">{t("downloads.subtitle")}</p>

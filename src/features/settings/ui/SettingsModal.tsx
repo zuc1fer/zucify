@@ -30,6 +30,7 @@ import {
 } from "./tabs";
 
 type TabId = "Playback" | "Shortcuts" | "Overlay" | "Discord" | "Appearance" | "Customization" | "Audio" | "Storage" | "About";
+const MOBILE_TAB_IDS: TabId[] = ["Playback", "Appearance", "Audio", "Storage", "About"];
 
 const TAB_ICONS: Record<TabId, React.ComponentType<any>> = {
   Playback: Play,
@@ -115,9 +116,11 @@ export default function SettingsModal() {
 
   const [activeTab, setActiveTab] = useState<TabId>("Playback");
   const [searchQuery, setSearchQuery] = useState("");
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
 
   const handleClose = () => {
     setSearchQuery("");
+    setMobileDetailOpen(false);
     close();
   };
 
@@ -210,7 +213,11 @@ export default function SettingsModal() {
   useEffect(() => {
     if (!searchQuery.trim()) return;
     if (matchingTabIds && matchingTabIds.size > 0 && !matchingTabIds.has(activeTab)) {
-      const firstMatch = TAB_GROUPS.flatMap((g) => g.ids).find((id) => matchingTabIds.has(id));
+      const candidateTabs =
+        typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches
+          ? MOBILE_TAB_IDS
+          : TAB_GROUPS.flatMap((group) => group.ids);
+      const firstMatch = candidateTabs.find((id) => matchingTabIds.has(id));
       if (firstMatch) {
         setActiveTab(firstMatch);
       }
@@ -230,6 +237,20 @@ export default function SettingsModal() {
     "Zucify";
   const handle = user?.username ? `@${user.username}` : (user?.email ?? t("settings.manage_account"));
 
+  const renderActiveTab = () => (
+    <>
+      {activeTab === "Playback" && <PlaybackTab searchQuery={searchQuery} />}
+      {activeTab === "Shortcuts" && <ShortcutsTab searchQuery={searchQuery} />}
+      {activeTab === "Overlay" && <OverlayTab searchQuery={searchQuery} />}
+      {activeTab === "Discord" && <DiscordTab searchQuery={searchQuery} />}
+      {activeTab === "Appearance" && <AppearanceTab searchQuery={searchQuery} />}
+      {activeTab === "Customization" && <CustomizationTab searchQuery={searchQuery} />}
+      {activeTab === "Audio" && <AudioTab searchQuery={searchQuery} />}
+      {activeTab === "Storage" && <StorageTab searchQuery={searchQuery} />}
+      {activeTab === "About" && <AboutTab searchQuery={searchQuery} />}
+    </>
+  );
+
   return (
     <Dialog
       open={open}
@@ -237,7 +258,153 @@ export default function SettingsModal() {
       maxWidth={880}
       className="p-0 h-[620px] max-h-[86vh] !flex-row overflow-hidden !bg-bg-elevated !border-0 max-md:!m-0 max-md:!h-[100dvh] max-md:!max-h-none max-md:!max-w-none max-md:!flex-col max-md:!rounded-none max-md:pt-[env(safe-area-inset-top)]"
     >
-      <aside className="w-[248px] shrink-0 flex flex-col min-h-0 bg-transparent max-md:w-full max-md:shrink-0">
+      <div className="flex md:hidden min-h-0 flex-1 flex-col bg-bg-primary">
+        {!mobileDetailOpen ? (
+          <>
+            <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border-primary px-5 py-4">
+              <div>
+                <h2 className="m-0 text-[22px] font-semibold text-text-primary" style={font}>
+                  {t("settings.title")}
+                </h2>
+              </div>
+              <button
+                type="button"
+                aria-label={t("common.close") || "Close"}
+                onClick={handleClose}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-border-alpha-14 text-text-primary"
+              >
+                <CloseLine size={19} />
+              </button>
+            </header>
+
+            <div className="shrink-0 px-4 py-3">
+              <div className="relative flex items-center">
+                <Search2Line size={17} className="pointer-events-none absolute left-3 text-text-tertiary" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder={t("settings.search_placeholder")}
+                  aria-label={t("settings.search_placeholder")}
+                  className="h-11 w-full rounded-xl border-0 bg-border-alpha-14 pl-10 pr-10 text-base text-text-primary outline-none placeholder:text-text-tertiary focus:bg-border-alpha-20"
+                  style={font}
+                />
+                {searchQuery ? (
+                  <button
+                    type="button"
+                    aria-label={t("common.clear") || "Clear search"}
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 border-0 bg-transparent p-0 text-text-tertiary"
+                  >
+                    <CloseCircleFill size={17} />
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(env(safe-area-inset-bottom)+16px)]">
+              {TAB_GROUPS.map((group) => {
+                const mobileIds = group.ids.filter(
+                  (id) => MOBILE_TAB_IDS.includes(id) && (!matchingTabIds || matchingTabIds.has(id)),
+                );
+                if (mobileIds.length === 0) return null;
+                return (
+                  <section key={group.labelKey} className="mb-5">
+                    <h3 className="mb-2 mt-2 px-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-text-tertiary">
+                      {t(`settings.groups.${group.labelKey}`)}
+                    </h3>
+                    <div className="overflow-hidden rounded-2xl border border-border-primary bg-bg-panel">
+                      {mobileIds.map((id) => {
+                        const Icon = TAB_ICONS[id];
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => {
+                              setActiveTab(id);
+                              setMobileDetailOpen(true);
+                            }}
+                            className="flex min-h-[70px] w-full items-center gap-3 border-0 border-b border-solid border-border-primary bg-transparent px-4 py-3 text-left last:border-b-0 active:bg-border-alpha-14"
+                          >
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-border-alpha-14 text-text-secondary">
+                              <Icon size={20} weight="Bold" />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-[14px] font-medium text-text-primary">{tabLabels[id]}</span>
+                              <span className="mt-1 block text-[12px] leading-snug text-text-tertiary">{tabDescriptions[id]}</span>
+                            </span>
+                            <span aria-hidden className="text-[25px] leading-none text-text-tertiary">&gt;</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+              {searchQuery && !MOBILE_TAB_IDS.some((id) => !matchingTabIds || matchingTabIds.has(id)) ? (
+                <p className="px-2 py-8 text-center text-[13px] text-text-tertiary">{t("search.no_results") || "No results found."}</p>
+              ) : null}
+
+              <div className="flex items-center gap-3 rounded-2xl border border-border-primary bg-bg-panel p-4">
+                <UserAvatar user={user ?? null} size={40} />
+                <div className="min-w-0 flex-1">
+                  <p className="m-0 truncate text-[13px] font-medium text-text-primary">{displayName}</p>
+                  <p className="m-0 mt-0.5 truncate text-[12px] text-text-tertiary">{handle}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    handleClose();
+                    await logout();
+                  }}
+                  aria-label={t("settings.profile.sign_out") || "Log out"}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-border-alpha-14 text-text-secondary"
+                >
+                  <ExitLine size={18} />
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <header className="flex shrink-0 items-center gap-3 border-b border-border-primary px-4 py-3">
+              <button
+                type="button"
+                onClick={() => setMobileDetailOpen(false)}
+                aria-label={t("settings.title")}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-border-alpha-14 text-text-primary"
+              >
+                <span aria-hidden className="text-[24px] leading-none">&lt;</span>
+              </button>
+              <h2 className="m-0 min-w-0 flex-1 truncate text-[18px] font-semibold text-text-primary" style={font}>
+                {tabLabels[activeTab]}
+              </h2>
+              <button
+                type="button"
+                aria-label={t("common.close") || "Close"}
+                onClick={handleClose}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-border-alpha-14 text-text-primary"
+              >
+                <CloseLine size={19} />
+              </button>
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-3">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 7 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.16, ease: "easeOut" }}
+                className="flex flex-col"
+              >
+                {renderActiveTab()}
+              </motion.div>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="hidden md:flex flex-1 min-w-0 min-h-0">
+      <aside className="w-[248px] shrink-0 flex flex-col min-h-0 bg-transparent">
         <div className="hidden max-md:flex items-center justify-between px-4 pt-3 pb-2">
           <div className="min-w-0">
             <h2 className="m-0 text-[20px] font-semibold text-text-primary" style={font}>
@@ -441,8 +608,8 @@ export default function SettingsModal() {
       </aside>
 
       {/* ── Right secondary frame: same roundness, inset with padding, darker ── */}
-      <div className="flex-1 min-w-0 min-h-0 p-[2px] flex max-md:p-0">
-        <div className="flex-1 min-w-0 min-h-0 flex flex-col rounded-xl bg-bg-primary overflow-hidden max-md:rounded-none">
+      <div className="flex-1 min-w-0 min-h-0 p-[2px] flex">
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col rounded-xl bg-bg-primary overflow-hidden">
         <div className="flex items-start justify-between gap-[16px] px-[24px] pt-[20px] pb-[10px] shrink-0 max-md:px-4 max-md:pt-3 max-md:pb-2">
           <div className="min-w-0">
             <h3
@@ -476,19 +643,11 @@ export default function SettingsModal() {
             transition={{ duration: 0.12, ease: "easeOut" }}
             className="flex-1 flex flex-col"
           >
-            {activeTab === "Playback" && <PlaybackTab searchQuery={searchQuery} />}
-            {activeTab === "Shortcuts" && <ShortcutsTab searchQuery={searchQuery} />}
-            {activeTab === "Overlay" && <OverlayTab searchQuery={searchQuery} />}
-            {activeTab === "Discord" && <DiscordTab searchQuery={searchQuery} />}
-            {activeTab === "Appearance" && <AppearanceTab searchQuery={searchQuery} />}
-            {activeTab === "Customization" && <CustomizationTab searchQuery={searchQuery} />}
-            {activeTab === "Audio" && <AudioTab searchQuery={searchQuery} />}
-            {activeTab === "Storage" && <StorageTab searchQuery={searchQuery} />}
-            {activeTab === "About" && <AboutTab searchQuery={searchQuery} />}
-
+            {renderActiveTab()}
           </motion.div>
         </div>
         </div>
+      </div>
       </div>
     </Dialog>
   );

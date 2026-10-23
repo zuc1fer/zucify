@@ -57,8 +57,9 @@ export function AudioTab({ searchQuery }: { searchQuery?: string }) {
         />
       </SettingSection>
 
-      <SettingSection label={t("settings.connection.title")}>
-        <SettingRow
+      <div className="hidden md:block">
+        <SettingSection label={t("settings.connection.title")}>
+          <SettingRow
           title={t("settings.connection.checks_title")}
           titleKey="settings.connection.checks_title"
           searchQuery={searchQuery}
@@ -115,8 +116,9 @@ export function AudioTab({ searchQuery }: { searchQuery?: string }) {
               </Button>
             </div>
           }
-        />
-      </SettingSection>
+          />
+        </SettingSection>
+      </div>
     </div>
   );
 }

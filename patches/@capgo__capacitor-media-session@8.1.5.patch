@@ -20,8 +20,63 @@ index 402bc6fb877f919269f0bfcfe535933da83c01e0..405564f478be65674e779fa3b1ee77fd
 +        plugin.actionCallback(action);
 +    }
  }
+diff --git a/android/src/main/java/com/capgo/mediasession/MediaSessionPlugin.java b/android/src/main/java/com/capgo/mediasession/MediaSessionPlugin.java
+index 1a2fdaccc94bcf8ced869b01020035dcd7d24123..ee3416e1c31c9b0a5645647d7c1f0b5a347c825e 100644
+--- a/android/src/main/java/com/capgo/mediasession/MediaSessionPlugin.java
++++ b/android/src/main/java/com/capgo/mediasession/MediaSessionPlugin.java
+@@ -44,6 +44,8 @@ public class MediaSessionPlugin extends Plugin {
+     private double duration = 0.0;
+     private double position = 0.0;
+     private double playbackRate = 1.0;
++    private boolean shuffleEnabled = false;
++    private String repeatMode = "off";
+ 
+     private final Map<String, PluginCall> actionHandlers = new HashMap<>();
+ 
+@@ -146,6 +148,8 @@ public class MediaSessionPlugin extends Plugin {
+         } else {
+             service.setPlaybackState(PlaybackStateCompat.STATE_NONE);
+         }
++        service.setShuffleEnabled(shuffleEnabled);
++        service.setRepeatMode(repeatMode);
+         service.update();
+     }
+ 
+@@ -244,6 +248,32 @@ public class MediaSessionPlugin extends Plugin {
+         call.resolve();
+     }
+ 
++    @PluginMethod
++    public void setShuffleState(PluginCall call) {
++        Boolean enabled = call.getBoolean("enabled");
++        shuffleEnabled = enabled != null && enabled;
++        if (service != null) {
++            service.setShuffleEnabled(shuffleEnabled);
++            service.updatePossibleActions();
++        }
++        call.resolve();
++    }
++
++    @PluginMethod
++    public void setRepeatMode(PluginCall call) {
++        String mode = call.getString("mode", "off");
++        if (!"off".equals(mode) && !"all".equals(mode) && !"one".equals(mode)) {
++            call.reject("Repeat mode must be off, all, or one");
++            return;
++        }
++        repeatMode = mode;
++        if (service != null) {
++            service.setRepeatMode(repeatMode);
++            service.updatePossibleActions();
++        }
++        call.resolve();
++    }
++
+     @PluginMethod(returnType = PluginMethod.RETURN_CALLBACK)
+     public void setActionHandler(PluginCall call) {
+         call.setKeepAlive(true);
 diff --git a/android/src/main/java/com/capgo/mediasession/MediaSessionService.java b/android/src/main/java/com/capgo/mediasession/MediaSessionService.java
-index 07a5f6d8e3feb1b29f7368d07971b83961c9d60a..00dd9f289ac9be7b7afcc5c7e2dc7ce885a8a363 100644
+index 07a5f6d8e3feb1b29f7368d07971b83961c9d60a..b9145eb3319d854389c09b51f60f836a0e6b9b86 100644
 --- a/android/src/main/java/com/capgo/mediasession/MediaSessionService.java
 +++ b/android/src/main/java/com/capgo/mediasession/MediaSessionService.java
 @@ -29,6 +29,7 @@ public class MediaSessionService extends Service {
@@ -32,18 +87,32 @@ index 07a5f6d8e3feb1b29f7368d07971b83961c9d60a..00dd9f289ac9be7b7afcc5c7e2dc7ce8
  
      private MediaSessionCompat mediaSession;
      private PlaybackStateCompat.Builder playbackStateBuilder;
-@@ -47,7 +48,9 @@ public class MediaSessionService extends Service {
-         "seekforward",
-         "nexttrack",
-         "seekto",
--        "stop"
-+        "stop",
+@@ -41,11 +42,13 @@ public class MediaSessionService extends Service {
+     private final Map<String, Long> playbackStateActions = new HashMap<>();
+     private final String[] possibleActions = {
+         "previoustrack",
+-        "seekbackward",
 +        "shuffle",
-+        "repeat"
+         "play",
+         "pause",
+-        "seekforward",
+         "nexttrack",
++        "repeat",
++        "seekbackward",
++        "seekforward",
+         "seekto",
+         "stop"
      };
-     private final Set<String> possibleCompactViewActions = new HashSet<>(
-         Arrays.asList("previoustrack", "play", "pause", "nexttrack", "stop")
-@@ -197,6 +200,22 @@ public class MediaSessionService extends Service {
+@@ -61,6 +64,8 @@ public class MediaSessionService extends Service {
+     private long duration = 0;
+     private long position = 0;
+     private float playbackSpeed = 1.0F;
++    private boolean shuffleEnabled = false;
++    private String repeatMode = "off";
+ 
+     private boolean possibleActionsUpdate = true;
+     private boolean playbackStateUpdate = false;
+@@ -197,6 +202,22 @@ public class MediaSessionService extends Service {
                  MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_STOP)
              )
          );
@@ -66,7 +135,7 @@ index 07a5f6d8e3feb1b29f7368d07971b83961c9d60a..00dd9f289ac9be7b7afcc5c7e2dc7ce8
  
          playbackStateActions.put("previoustrack", PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS);
          playbackStateActions.put("seekbackward", PlaybackStateCompat.ACTION_REWIND);
-@@ -215,12 +234,28 @@ public class MediaSessionService extends Service {
+@@ -215,12 +236,28 @@ public class MediaSessionService extends Service {
  
      @Override
      public int onStartCommand(Intent intent, int flags, int startId) {
@@ -96,7 +165,31 @@ index 07a5f6d8e3feb1b29f7368d07971b83961c9d60a..00dd9f289ac9be7b7afcc5c7e2dc7ce8
      public void setPlaybackState(int newPlaybackState) {
          if (playbackState != newPlaybackState) {
              playbackState = newPlaybackState;
-@@ -289,6 +324,7 @@ public class MediaSessionService extends Service {
+@@ -229,6 +266,23 @@ public class MediaSessionService extends Service {
+         }
+     }
+ 
++    public void setShuffleEnabled(boolean enabled) {
++        if (shuffleEnabled != enabled) {
++            shuffleEnabled = enabled;
++            possibleActionsUpdate = true;
++            notificationUpdate = true;
++        }
++    }
++
++    public void setRepeatMode(String mode) {
++        String nextMode = mode == null ? "off" : mode;
++        if (!repeatMode.equals(nextMode)) {
++            repeatMode = nextMode;
++            possibleActionsUpdate = true;
++            notificationUpdate = true;
++        }
++    }
++
+     public void setTitle(String newTitle) {
+         if (!title.equals(newTitle)) {
+             title = newTitle != null ? newTitle : "";
+@@ -289,6 +343,7 @@ public class MediaSessionService extends Service {
              }
  
              long activePlaybackStateActions = 0;
@@ -104,24 +197,45 @@ index 07a5f6d8e3feb1b29f7368d07971b83961c9d60a..00dd9f289ac9be7b7afcc5c7e2dc7ce8
              int[] activeCompactViewActionIndices = new int[3];
              int notificationActionIndex = 0;
              int compactNotificationActionIndicesIndex = 0;
-@@ -306,6 +342,24 @@ public class MediaSessionService extends Service {
+@@ -306,6 +361,45 @@ public class MediaSessionService extends Service {
                          activePlaybackStateActions = activePlaybackStateActions | playbackStateActions.get(actionName);
                      }
  
 +                    if ("shuffle".equals(actionName)) {
++                        int icon = shuffleEnabled
++                            ? R.drawable.ic_baseline_shuffle_active_24
++                            : R.drawable.ic_baseline_shuffle_24;
++                        notificationActions.put(
++                            "shuffle",
++                            new NotificationCompat.Action(
++                                icon,
++                                shuffleEnabled ? "Shuffle on" : "Shuffle off",
++                                buildCustomActionPendingIntent("shuffle")
++                            )
++                        );
 +                        activeCustomActions.add(
 +                            new PlaybackStateCompat.CustomAction.Builder(
 +                                "shuffle",
-+                                "Shuffle",
-+                                R.drawable.ic_baseline_shuffle_24
++                                shuffleEnabled ? "Shuffle on" : "Shuffle off",
++                                icon
 +                            ).build()
 +                        );
 +                    } else if ("repeat".equals(actionName)) {
++                        int icon = getRepeatIcon();
++                        String repeatLabel = "Repeat " + repeatMode;
++                        notificationActions.put(
++                            "repeat",
++                            new NotificationCompat.Action(
++                                icon,
++                                repeatLabel,
++                                buildCustomActionPendingIntent("repeat")
++                            )
++                        );
 +                        activeCustomActions.add(
 +                            new PlaybackStateCompat.CustomAction.Builder(
 +                                "repeat",
-+                                "Repeat",
-+                                R.drawable.ic_baseline_repeat_24
++                                repeatLabel,
++                                icon
 +                            ).build()
 +                        );
 +                    }
@@ -129,7 +243,7 @@ index 07a5f6d8e3feb1b29f7368d07971b83961c9d60a..00dd9f289ac9be7b7afcc5c7e2dc7ce8
                      if (notificationActions.containsKey(actionName) && notificationBuilder != null) {
                          notificationBuilder.addAction(notificationActions.get(actionName));
                          if (possibleCompactViewActions.contains(actionName) && compactNotificationActionIndicesIndex < 3) {
-@@ -318,7 +372,12 @@ public class MediaSessionService extends Service {
+@@ -318,7 +412,12 @@ public class MediaSessionService extends Service {
              }
  
              if (playbackStateBuilder != null) {
@@ -143,6 +257,21 @@ index 07a5f6d8e3feb1b29f7368d07971b83961c9d60a..00dd9f289ac9be7b7afcc5c7e2dc7ce8
              }
              if (notificationStyle != null) {
                  if (compactNotificationActionIndicesIndex > 0) {
+@@ -366,4 +465,14 @@ public class MediaSessionService extends Service {
+         possibleActionsUpdate = true;
+         update();
+     }
++
++    private int getRepeatIcon() {
++        if ("one".equals(repeatMode)) {
++            return R.drawable.ic_baseline_repeat_one_24;
++        }
++        if ("all".equals(repeatMode)) {
++            return R.drawable.ic_baseline_repeat_all_24;
++        }
++        return R.drawable.ic_baseline_repeat_24;
++    }
+ }
 diff --git a/android/src/main/res/drawable/ic_baseline_repeat_24.xml b/android/src/main/res/drawable/ic_baseline_repeat_24.xml
 new file mode 100644
 index 0000000000000000000000000000000000000000..b3f8b0d37fd315a5f2bee74f18bc5db6cabef121
@@ -157,6 +286,40 @@ index 0000000000000000000000000000000000000000..b3f8b0d37fd315a5f2bee74f18bc5db6
 +    <path
 +        android:fillColor="@android:color/white"
 +        android:pathData="M7,7h11v3l4,-4 -4,-4v3H5v7h2V7zM17,17H6v-3l-4,4 4,4v-3h15v-7h-2v5z" />
++</vector>
+diff --git a/android/src/main/res/drawable/ic_baseline_repeat_all_24.xml b/android/src/main/res/drawable/ic_baseline_repeat_all_24.xml
+new file mode 100644
+index 0000000000000000000000000000000000000000..078b0aae11f7087bd89c45de4b6be5c074ea5749
+--- /dev/null
++++ b/android/src/main/res/drawable/ic_baseline_repeat_all_24.xml
+@@ -0,0 +1,10 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:height="24dp"
++    android:width="24dp"
++    android:viewportHeight="24"
++    android:viewportWidth="24">
++    <path
++        android:fillColor="@android:color/white"
++        android:pathData="M7,7h11v3l4,-4 -4,-4v3H5v7h2V7zM17,17H6v-3l-4,4 4,4v-3h15v-7h-2v5z" />
++    <path android:fillColor="@android:color/white" android:pathData="M11,11h2v2h-2z" />
++</vector>
+diff --git a/android/src/main/res/drawable/ic_baseline_repeat_one_24.xml b/android/src/main/res/drawable/ic_baseline_repeat_one_24.xml
+new file mode 100644
+index 0000000000000000000000000000000000000000..6f874881c78331d7430a04fc49eb10a280e15fc0
+--- /dev/null
++++ b/android/src/main/res/drawable/ic_baseline_repeat_one_24.xml
+@@ -0,0 +1,12 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:height="24dp"
++    android:width="24dp"
++    android:viewportHeight="24"
++    android:viewportWidth="24">
++    <path
++        android:fillColor="@android:color/white"
++        android:pathData="M7,7h11v3l4,-4 -4,-4v3H5v7h2V7zM17,17H6v-3l-4,4 4,4v-3h15v-7h-2v5z" />
++    <path
++        android:fillColor="@android:color/white"
++        android:pathData="M10.5,10h1.3v3.8h1.4v1.2H9.2v-1.2h1.3v-2.3l-1,0.5v-1.2z" />
 +</vector>
 diff --git a/android/src/main/res/drawable/ic_baseline_shuffle_24.xml b/android/src/main/res/drawable/ic_baseline_shuffle_24.xml
 new file mode 100644
@@ -173,32 +336,95 @@ index 0000000000000000000000000000000000000000..0074a7781f076ef81419ad5decd32e69
 +        android:fillColor="@android:color/white"
 +        android:pathData="M14,5h7v7h-2V8.41l-4.29,4.3 -1.42,-1.42L17.59,7H14V5zM3,6h5.59l11.7,11.7 -1.41,1.41L7.78,8H3V6zM3,18h4.78l4.72,-4.72 1.41,1.41L8.59,20H3v-2z" />
 +</vector>
-diff --git a/android/src/main/res/drawable/ic_baseline_volume_up_24.xml b/android/src/main/res/drawable/ic_baseline_volume_up_24.xml
---- a/android/src/main/res/drawable/ic_baseline_volume_up_24.xml
-+++ b/android/src/main/res/drawable/ic_baseline_volume_up_24.xml
-@@ -1,10 +1,22 @@
- <vector xmlns:android="http://schemas.android.com/apk/res/android"
-     android:height="24dp"
--    android:tint="#000000"
-     android:viewportHeight="24"
-     android:viewportWidth="24"
-     android:width="24dp">
-     <path
--        android:fillColor="@android:color/white"
--        android:pathData="M3,9v6h4l5,5L12,4L7,9L3,9zM16.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02zM14,3.23v2.06c2.89,0.86 5,3.54 5,6.71s-2.11,5.85 -5,6.71v2.06c4.01,-0.91 7,-4.49 7,-8.77s-2.99,-7.86 -7,-8.77z" />
-+        android:fillColor="@android:color/transparent"
-+        android:pathData="M12.1,3.8 C7.5,3.8 3.8,7.5 3.8,12 s3.7,8.2 8.3,8.2 8.3,-3.6 8.3,-8.2 c0,-4.1 -2.7,-7.5 -6.4,-8.1"
-+        android:strokeColor="#FFFFFFFF"
-+        android:strokeLineCap="round"
-+        android:strokeLineJoin="round"
-+        android:strokeWidth="2.5" />
+diff --git a/android/src/main/res/drawable/ic_baseline_shuffle_active_24.xml b/android/src/main/res/drawable/ic_baseline_shuffle_active_24.xml
+new file mode 100644
+index 0000000000000000000000000000000000000000..2adbc24e9e948a3876f4608704cf817c9677650d
+--- /dev/null
++++ b/android/src/main/res/drawable/ic_baseline_shuffle_active_24.xml
+@@ -0,0 +1,10 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:height="24dp"
++    android:width="24dp"
++    android:viewportHeight="24"
++    android:viewportWidth="24">
 +    <path
-+        android:fillColor="#FFFFFFFF"
-+        android:pathData="M10.8,4.7 C10.2,2.8 11.4,1.5 13.4,1.8 L17.1,2.4 C18.4,2.7 19,4 18.3,5.1 L16.2,7.1 L12.8,6.5 Z" />
-+    <path
-+        android:fillColor="@android:color/transparent"
-+        android:pathData="M12.2,2.6 L11.1,1.5 M14.6,2.1 L15.6,1.2"
-+        android:strokeColor="#FFFFFFFF"
-+        android:strokeLineCap="round"
-+        android:strokeWidth="1.1" />
- </vector>
++        android:fillColor="@android:color/white"
++        android:pathData="M14,5h7v7h-2V8.41l-4.29,4.3 -1.42,-1.42L17.59,7H14V5zM3,6h5.59l11.7,11.7 -1.41,1.41L7.78,8H3V6zM3,18h4.78l4.72,-4.72 1.41,1.41L8.59,20H3v-2z" />
++    <path android:fillColor="@android:color/white" android:pathData="M10,21h4v2h-4z" />
++</vector>
+diff --git a/dist/esm/definitions.d.ts b/dist/esm/definitions.d.ts
+index b0908679474eaec92c4f9c33d2bcd8381f0e062d..914c3464810aafd273da8f153f137dcf6d617c5c 100644
+--- a/dist/esm/definitions.d.ts
++++ b/dist/esm/definitions.d.ts
+@@ -4,7 +4,7 @@ export interface MediaImage {
+     type?: string;
+ }
+ export type MediaSessionPlaybackState = 'none' | 'paused' | 'playing';
+-export type MediaSessionAction = 'play' | 'pause' | 'seekbackward' | 'seekforward' | 'previoustrack' | 'nexttrack' | 'seekto' | 'stop';
++export type MediaSessionAction = 'play' | 'pause' | 'seekbackward' | 'seekforward' | 'previoustrack' | 'nexttrack' | 'seekto' | 'stop' | 'shuffle' | 'repeat';
+ export interface MetadataOptions {
+     album?: string;
+     artist?: string;
+@@ -27,6 +27,12 @@ export interface PositionStateOptions {
+     playbackRate?: number;
+     position?: number;
+ }
++export interface ShuffleStateOptions {
++    enabled: boolean;
++}
++export interface RepeatModeOptions {
++    mode: 'off' | 'all' | 'one';
++}
+ export interface MediaSessionPlugin {
+     /**
+      * Sets metadata of the currently playing media.
+@@ -44,6 +50,14 @@ export interface MediaSessionPlugin {
+      * Updates position state for the active media session.
+      */
+     setPositionState(options: PositionStateOptions): Promise<void>;
++    /**
++     * Updates the shuffle state used by Android media controls.
++     */
++    setShuffleState(options: ShuffleStateOptions): Promise<void>;
++    /**
++     * Updates the repeat mode used by Android media controls.
++     */
++    setRepeatMode(options: RepeatModeOptions): Promise<void>;
+     /**
+      * Get the native Capacitor plugin version
+      *
+diff --git a/dist/esm/web.d.ts b/dist/esm/web.d.ts
+index 90b124a5b9172b9984df93476160fc5f1ccb3b90..a9e5dadb0b5ae8e5bae5bb95f09910d698a93d7d 100644
+--- a/dist/esm/web.d.ts
++++ b/dist/esm/web.d.ts
+@@ -1,10 +1,12 @@
+ import { WebPlugin } from '@capacitor/core';
+-import type { ActionHandler, ActionHandlerOptions, MediaSessionPlugin, MetadataOptions, PlaybackStateOptions, PositionStateOptions } from './definitions';
++import type { ActionHandler, ActionHandlerOptions, MediaSessionPlugin, MetadataOptions, PlaybackStateOptions, PositionStateOptions, RepeatModeOptions, ShuffleStateOptions } from './definitions';
+ export declare class MediaSessionWeb extends WebPlugin implements MediaSessionPlugin {
+     setMetadata(options: MetadataOptions): Promise<void>;
+     setPlaybackState(options: PlaybackStateOptions): Promise<void>;
+     setActionHandler(options: ActionHandlerOptions, handler: ActionHandler | null): Promise<void>;
+     setPositionState(options: PositionStateOptions): Promise<void>;
++    setShuffleState(options: ShuffleStateOptions): Promise<void>;
++    setRepeatMode(options: RepeatModeOptions): Promise<void>;
+     getPluginVersion(): Promise<{
+         version: string;
+     }>;
+diff --git a/dist/esm/web.js b/dist/esm/web.js
+index f5402467e532c3a4b67ec80be1ee2b1caa3cb3db..5ac9951c1715f8ef003ab0ef7b943000ec568088 100644
+--- a/dist/esm/web.js
++++ b/dist/esm/web.js
+@@ -34,6 +34,12 @@ export class MediaSessionWeb extends WebPlugin {
+         }
+         mediaSession.setPositionState(options);
+     }
++    async setShuffleState(_options) {
++        // The browser Media Session API has no shuffle state property.
++    }
++    async setRepeatMode(_options) {
++        // The browser Media Session API has no repeat state property.
++    }
+     async getPluginVersion() {
+         return { version: 'web' };
+     }

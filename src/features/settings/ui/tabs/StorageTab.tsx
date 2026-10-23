@@ -582,7 +582,7 @@ export function StorageTab({ searchQuery: _searchQuery }: { searchQuery?: string
           type="button"
           onClick={handleOpenFolder}
           title={t("settings.storage.open_folder")}
-          className="flex items-center gap-[6px] !h-[40px] px-[14px] font-[500] text-[13px] rounded-xl shrink-0"
+          className="flex items-center gap-[6px] !h-[40px] px-[14px] font-[500] text-[13px] rounded-xl shrink-0 max-md:hidden"
         >
           <FolderOpenLine size={16} />
           <span>{t("settings.storage.open_folder")}</span>

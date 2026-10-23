@@ -51,34 +51,36 @@ export function PlaybackTab({ searchQuery }: { searchQuery?: string }) {
         }
       />
 
-      <SettingRow
-        title={t("settings.track_double_click.title")}
-        description={t("settings.track_double_click.description")}
-        titleKey="settings.track_double_click.title"
-        descKey="settings.track_double_click.description"
-        searchQuery={searchQuery}
-        control={
-          mounted ? (
-            <SegmentedControl
-              ariaLabel={t("settings.track_double_click.title")}
-              value={trackDoubleClickBehavior}
-              onChange={setTrackDoubleClickBehavior}
-              options={[
-                {
-                  value: "play",
-                  label: t("settings.track_double_click.play"),
-                },
-                {
-                  value: "queue",
-                  label: t("settings.track_double_click.queue"),
-                },
-              ]}
-            />
-          ) : (
-            <span />
-          )
-        }
-      />
+      <div className="hidden md:block">
+        <SettingRow
+          title={t("settings.track_double_click.title")}
+          description={t("settings.track_double_click.description")}
+          titleKey="settings.track_double_click.title"
+          descKey="settings.track_double_click.description"
+          searchQuery={searchQuery}
+          control={
+            mounted ? (
+              <SegmentedControl
+                ariaLabel={t("settings.track_double_click.title")}
+                value={trackDoubleClickBehavior}
+                onChange={setTrackDoubleClickBehavior}
+                options={[
+                  {
+                    value: "play",
+                    label: t("settings.track_double_click.play"),
+                  },
+                  {
+                    value: "queue",
+                    label: t("settings.track_double_click.queue"),
+                  },
+                ]}
+              />
+            ) : (
+              <span />
+            )
+          }
+        />
+      </div>
 
       <SettingRow
         title={t("settings.default_playback_context.title")}

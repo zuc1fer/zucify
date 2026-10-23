@@ -414,7 +414,7 @@ export default function LibraryPage() {
       >
         <div className="sticky top-0 z-20 bg-transparent">
 
-          <div className="px-[32px] pt-[20px] pb-[10px] max-md:px-4 max-md:pt-4 max-md:pb-2">
+          <div className="px-[32px] pt-[20px] pb-[10px] max-md:px-4 max-md:pt-[calc(env(safe-area-inset-top)+16px)] max-md:pb-2">
             <h1
               className="text-[26px] font-bold text-text-primary tracking-tight m-0 leading-tight max-md:text-[22px]"
               style={{ fontFamily: "var(--font-inter), sans-serif" }}
