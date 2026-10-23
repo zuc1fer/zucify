@@ -1,3 +1,4 @@
+import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { parseVisitorData } from "./visitorData";
 
 /**
@@ -15,6 +16,38 @@ let cachedSession: VisitorSession | null = null;
 let pendingFetch: Promise<string> | null = null;
 
 const SESSION_TTL_MS = 5.5 * 60 * 60 * 1000; // 5.5 hours
+const VISITOR_DATA_URL = "https://www.youtube.com/sw.js_data";
+
+async function fetchVisitorDataText(): Promise<string> {
+  if (Capacitor.isNativePlatform()) {
+    const response = await CapacitorHttp.get({
+      url: VISITOR_DATA_URL,
+      headers: {
+        accept: "text/plain, */*",
+        ...(typeof navigator !== "undefined" ? { "user-agent": navigator.userAgent } : {}),
+      },
+      responseType: "text",
+      connectTimeout: 15_000,
+      readTimeout: 20_000,
+    });
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`sw.js_data returned ${response.status}`);
+    }
+    if (typeof response.data !== "string") throw new Error("sw.js_data returned invalid text");
+    return response.data;
+  }
+
+  const response = await fetch(VISITOR_DATA_URL, {
+    headers: {
+      "user-agent":
+        typeof navigator !== "undefined"
+          ? navigator.userAgent
+          : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    },
+  });
+  if (!response.ok) throw new Error(`sw.js_data returned ${response.status}`);
+  return response.text();
+}
 
 export function resetClientVisitorData(): void {
   cachedSession = null;
@@ -32,20 +65,7 @@ export async function getClientVisitorData(): Promise<string> {
 
   pendingFetch = (async () => {
     try {
-      const res = await fetch("https://www.youtube.com/sw.js_data", {
-        headers: {
-          "user-agent":
-            typeof navigator !== "undefined"
-              ? navigator.userAgent
-              : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        },
-      });
-
-      if (!res.ok) {
-        throw new Error(`sw.js_data returned ${res.status}`);
-      }
-
-      const text = await res.text();
+      const text = await fetchVisitorDataText();
       const visitorData = parseVisitorData(text);
       if (!visitorData) {
         throw new Error("Could not parse visitorData from sw.js_data");

@@ -1,3 +1,4 @@
+import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { InnertubeError, postInnertube, type InnertubeProfile } from "./innertubeClient";
 import { PLAYBACK_PROFILES } from "./playbackProfiles";
 import { resetClientVisitorData } from "@/shared/api/visitorSession";
@@ -43,6 +44,22 @@ async function assertStreamReachable(url: string, contentLength: number | undefi
   const probe = new URL(url);
   const offset = contentLength && contentLength > PROBE_OFFSET ? PROBE_OFFSET : 0;
   probe.searchParams.set("range", `${offset}-${offset}`);
+
+  if (Capacitor.isNativePlatform()) {
+    if (signal?.aborted) throw signal.reason ?? new DOMException("The request was aborted.", "AbortError");
+    const response = await CapacitorHttp.get({
+      url: probe.toString(),
+      responseType: "text",
+      connectTimeout: 10_000,
+      readTimeout: 10_000,
+    });
+    if (signal?.aborted) throw signal.reason ?? new DOMException("The request was aborted.", "AbortError");
+    if (response.status < 200 || response.status >= 300) {
+      throw new InnertubeError(`stream url rejected with ${response.status}`, response.status);
+    }
+    return;
+  }
+
   const response = await fetch(probe.toString(), { signal });
   await response.body?.cancel().catch(() => undefined);
   if (!response.ok) throw new InnertubeError(`stream url rejected with ${response.status}`, response.status);

@@ -5,6 +5,17 @@ const { resetClientVisitorData, webRemix } = vi.hoisted(() => ({
   webRemix: { resolve: vi.fn(), reset: vi.fn() },
 }));
 
+const { isNativePlatform, nativeGet, nativePost } = vi.hoisted(() => ({
+  isNativePlatform: vi.fn(() => false),
+  nativeGet: vi.fn(),
+  nativePost: vi.fn(),
+}));
+
+vi.mock("@capacitor/core", () => ({
+  Capacitor: { isNativePlatform },
+  CapacitorHttp: { get: nativeGet, post: nativePost },
+}));
+
 vi.mock("./webRemixAudio", () => ({
   resolveWebRemixAudioStream: webRemix.resolve,
   resetWebRemixSession: webRemix.reset,
@@ -51,6 +62,10 @@ function playerCalls(fetchSpy: ReturnType<typeof mockPlayerApi>) {
 }
 
 beforeEach(() => {
+  isNativePlatform.mockReset();
+  isNativePlatform.mockReturnValue(false);
+  nativeGet.mockReset();
+  nativePost.mockReset();
   webRemix.resolve.mockRejectedValue(new Error("WEB_REMIX unavailable in tests"));
 });
 
@@ -130,6 +145,28 @@ describe("resolveDirectAudioStream", () => {
     fetchSpy.mockClear();
     await resolveDirectAudioStream("dQw4w9WgXcQ");
     expect(JSON.parse(String(playerCalls(fetchSpy)[0][1]?.body)).context.client.clientName).toBe("ANDROID_VR");
+  });
+
+  it("probes YouTube stream URLs with native HTTP on mobile", async () => {
+    isNativePlatform.mockReturnValue(true);
+    nativePost.mockResolvedValue({
+      status: 200,
+      data: {
+        playabilityStatus: { status: "OK" },
+        streamingData: { adaptiveFormats: [opus] },
+      },
+    });
+    nativeGet.mockResolvedValue({ status: 206, data: "x" });
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    await expect(resolveDirectAudioStream("dQw4w9WgXcQ")).resolves.toMatchObject({ itag: 251 });
+
+    expect(nativePost).toHaveBeenCalledOnce();
+    expect(nativeGet).toHaveBeenCalledWith(expect.objectContaining({
+      url: expect.stringContaining("googlevideo.com/videoplayback"),
+      responseType: "text",
+    }));
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("reports every profile failure when nothing is playable", async () => {
