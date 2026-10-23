@@ -1,4 +1,5 @@
 import { Innertube, Platform } from "youtubei.js/web";
+import { Capacitor } from "@capacitor/core";
 import { getClientVisitorData } from "@/shared/api/visitorSession";
 import { InnertubeError } from "./innertubeClient";
 import { selectBestAudioFormat, toResolvedStream, type AudioFormat, type ResolvedAudioStream } from "./innertubeAudioFormats";
@@ -46,6 +47,10 @@ export function resetWebRemixSession(): void {
 }
 
 async function mintContentPoToken(videoId: string): Promise<string> {
+  if (Capacitor.isNativePlatform()) {
+    const { mintMobilePoToken } = await import("./mobilePoToken");
+    return mintMobilePoToken(videoId);
+  }
   const mint = typeof window === "undefined" ? undefined : window.linerElectron?.mintPoToken;
   if (!mint) throw new InnertubeError("PO tokens need a newer Zucify app version.", 501);
   return mint(videoId);

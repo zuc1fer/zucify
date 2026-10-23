@@ -5,6 +5,11 @@ const config: CapacitorConfig = {
   appName: "Zucify",
   webDir: "dist",
   backgroundColor: "#080808",
+  plugins: {
+    CapacitorHttp: {
+      enabled: true,
+    },
+  },
   ios: {
     contentInset: "automatic",
   },
