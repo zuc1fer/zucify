@@ -1,0 +1,69 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-ios:
+    name: Build unsigned iOS IPA
+    runs-on: macos-26
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web app
+        run: pnpm build
+        env:
+          VITE_API_URL: https://api.tryliner.fun
+          VITE_COVERS_PROXY_URL: https://covers.tryliner.fun
+
+      - name: Sync Capacitor iOS project
+        run: pnpm exec cap sync ios
+
+      - name: Build unsigned iOS app
+        run: >-
+          xcodebuild
+          -project ios/App/App.xcodeproj
+          -scheme App
+          -configuration Release
+          -sdk iphoneos
+          -destination 'generic/platform=iOS'
+          -derivedDataPath build/ios-derived
+          CODE_SIGNING_ALLOWED=NO
+          build
+
+      - name: Package IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_path="build/ios-derived/Build/Products/Release-iphoneos/App.app"
+          test -d "$app_path"
+          mkdir -p build/ipa/Payload output
+          ditto "$app_path" build/ipa/Payload/App.app
+          ditto -c -k --sequesterRsrc --keepParent build/ipa/Payload output/Zucify-unsigned.ipa
+          unzip -Z1 output/Zucify-unsigned.ipa | grep -q '^Payload/App.app/Info.plist$'
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zucify-ios-unsigned-ipa
+          path: output/Zucify-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
