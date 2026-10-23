@@ -71,6 +71,25 @@ describe("linerDb storage layer", () => {
     expect(await linerDb.hasAudio("temporary-audio")).toBe(false);
   });
 
+  it("persists offline playlists and removes tracks from their membership", async () => {
+    await linerDb.putDownloadedPlaylist({
+      id: "source:playlist-1",
+      title: "Night Drive",
+      coverUrl: "cover.jpg",
+      coverUrls: ["cover.jpg"],
+      trackIds: ["track-one", "track-two"],
+      downloadedAt: 1234,
+    });
+
+    await linerDb.removeTrackFromDownloadedPlaylists("track-one");
+    expect(await linerDb.getDownloadedPlaylists()).toMatchObject([
+      { id: "source:playlist-1", trackIds: ["track-two"] },
+    ]);
+
+    await linerDb.removeTrackFromDownloadedPlaylists("track-two");
+    expect(await linerDb.getDownloadedPlaylists()).toEqual([]);
+  });
+
   it("stores lyrics and updates weekly checked timestamp", async () => {
     const initialTime = Date.now() - 10000;
     await linerDb.putLyrics({

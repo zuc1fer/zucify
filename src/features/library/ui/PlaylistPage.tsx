@@ -483,18 +483,37 @@ function LibraryPlaylistContent() {
   }, [currentTracks, viewData, decodedId, playlistPartyActive]);
 
   const { toast } = useToast();
-  const enqueueDownloads = useDownloadsStore((state) => state.enqueue);
   const downloadedTrackIds = useDownloadsStore((state) => state.downloadedIds);
+  const downloadedPlaylists = useDownloadsStore((state) => state.playlists);
+  const enqueueDownloadedPlaylist = useDownloadsStore((state) => state.enqueuePlaylist);
+  const offlinePlaylistId = isLikesMode
+    ? "special:liked-songs"
+    : isSharedMode && socialPlaylistId
+      ? `shared:${socialPlaylistId}`
+      : decodedId
+        ? `source:${decodedId}`
+        : null;
+  const isPlaylistSavedOffline = downloadedPlaylists.some((playlist) => playlist.id === offlinePlaylistId);
   const [addedToQueue, setAddedToQueue] = useState(false);
 
   const handleDownloadPlaylist = useCallback(() => {
-    const remainingTracks = currentTracks.filter((track) => !downloadedTrackIds.has(track.id));
-    if (remainingTracks.length === 0) return;
-    enqueueDownloads(remainingTracks);
-    toast(t("downloads.added_playlist"), "info", {
-      description: `${remainingTracks.length} ${t("downloads.tracks_queued")}`,
-    });
-  }, [currentTracks, downloadedTrackIds, enqueueDownloads, toast, t]);
+    if (!offlinePlaylistId || !viewData || currentTracks.length === 0) return;
+    const tracksToQueue = currentTracks.filter((track) => !downloadedTrackIds.has(track.id));
+    void enqueueDownloadedPlaylist({
+      id: offlinePlaylistId,
+      title: viewData.title,
+      coverUrl: viewData.coverUrl,
+      coverUrls: viewData.coverUrls,
+      trackIds: currentTracks.map((track) => track.id),
+    }, currentTracks);
+    toast(
+      tracksToQueue.length > 0 ? t("downloads.added_playlist") : t("downloads.playlist_saved"),
+      "info",
+      tracksToQueue.length > 0
+        ? { description: `${tracksToQueue.length} ${t("downloads.tracks_queued")}` }
+        : undefined,
+    );
+  }, [currentTracks, downloadedTrackIds, enqueueDownloadedPlaylist, offlinePlaylistId, toast, t, viewData]);
 
   const handleMakeCollaborative = useCallback(async () => {
     if (isSharedMode || !decodedId || !playlistDetail || !viewData || socialBusy) return;
@@ -1128,9 +1147,9 @@ function LibraryPlaylistContent() {
                         <Button
                           variant={hasCustomBg ? "glass-action" : "outline"}
                           onClick={handleDownloadPlaylist}
-                          disabled={currentTracks.length === 0 || currentTracks.every((track) => downloadedTrackIds.has(track.id))}
+                          disabled={currentTracks.length === 0 || (isPlaylistSavedOffline && currentTracks.every((track) => downloadedTrackIds.has(track.id)))}
                           className="!h-[36px] !w-[36px] shrink-0 !p-0 flex items-center justify-center text-text-primary max-md:!h-11 max-md:!w-11"
-                          title={t("downloads.save_playlist")}
+                          title={isPlaylistSavedOffline ? t("downloads.playlist_saved") : t("downloads.save_playlist")}
                         >
                           <DownloadLine size={16} />
                         </Button>

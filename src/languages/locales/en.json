@@ -241,7 +241,12 @@
   "downloads": {
     "title": "Downloads",
     "subtitle": "Keep music on this device for offline listening.",
+    "playlists": "Playlists",
+    "all_downloads": "All downloads",
+    "back": "Back to downloads",
+    "offline_playlist": "Downloaded playlist",
     "song_count": "{count} tracks saved offline",
+    "song_count_one": "1 track saved offline",
     "play_all": "Play downloads",
     "saved_songs": "Saved songs",
     "in_progress": "In progress",
@@ -254,10 +259,13 @@
     "removed": "Removed offline copy",
     "added": "Added to download queue",
     "added_playlist": "Playlist added to download queue",
+    "playlist_saved": "Playlist saved for offline listening",
+    "playlist_progress": "{saved} saved · {pending} in progress",
     "tracks_queued": "tracks added",
     "save_playlist": "Download playlist",
     "empty_title": "No downloads yet",
     "empty_desc": "Save songs from a track menu or download a playlist to listen without an internet connection.",
+    "empty_playlist": "There are no saved songs in this playlist yet.",
     "find_music": "Find music"
   },
   "login": {

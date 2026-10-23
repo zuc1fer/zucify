@@ -27,6 +27,15 @@ export interface CachedAudioRecord {
   downloadedAt?: number;
 }
 
+export interface DownloadedPlaylistRecord {
+  id: string;
+  title: string;
+  coverUrl: string;
+  coverUrls: string[];
+  trackIds: string[];
+  downloadedAt: number;
+}
+
 export interface CachedLyricsRecord {
   trackId: string;
   syncLevel: LyricsSyncLevel;
@@ -50,7 +59,7 @@ export interface CachedArtistRecord {
 }
 
 const DB_NAME = "liner_db_v1";
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 const MEM_AUDIO_LIMIT = 3;
 
@@ -60,6 +69,7 @@ class LinerDb {
 
   private memTracks = new Map<string, CachedTrackRecord>();
   private memAudio = new Map<string, CachedAudioRecord>();
+  private memDownloadedPlaylists = new Map<string, DownloadedPlaylistRecord>();
   private memLyrics = new Map<string, CachedLyricsRecord>();
   private memArtists = new Map<string, CachedArtistRecord>();
 
@@ -123,6 +133,11 @@ class LinerDb {
           const artistStore = db.createObjectStore("artists", { keyPath: "id" });
           artistStore.createIndex("lastCheckedAt", "lastCheckedAt", { unique: false });
         }
+
+        if (!db.objectStoreNames.contains("downloadedPlaylists")) {
+          const playlistStore = db.createObjectStore("downloadedPlaylists", { keyPath: "id" });
+          playlistStore.createIndex("downloadedAt", "downloadedAt", { unique: false });
+        }
       };
 
       request.onsuccess = () => {
@@ -157,7 +172,7 @@ class LinerDb {
 
   // executes indexeddb transaction with one auto-reconnect retry and zero unhandled rejections
   private async runTransaction<T>(
-    storeName: "tracks" | "audio" | "lyrics" | "artists",
+    storeName: "tracks" | "audio" | "downloadedPlaylists" | "lyrics" | "artists",
     mode: IDBTransactionMode,
     operation: (store: IDBObjectStore) => Promise<T>,
   ): Promise<T | null> {
@@ -364,6 +379,66 @@ class LinerDb {
     return Array.from(this.memAudio.values())
       .filter((record) => Boolean(record.downloadedAt))
       .sort((a, b) => (b.downloadedAt ?? 0) - (a.downloadedAt ?? 0));
+  }
+
+  async getDownloadedPlaylists(): Promise<DownloadedPlaylistRecord[]> {
+    const result = await this.runTransaction("downloadedPlaylists", "readonly", (store) => {
+      return new Promise<DownloadedPlaylistRecord[]>((resolve) => {
+        const records: DownloadedPlaylistRecord[] = [];
+        const request = store.openCursor();
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (cursor) {
+            records.push(cursor.value as DownloadedPlaylistRecord);
+            cursor.continue();
+          } else {
+            records.sort((a, b) => b.downloadedAt - a.downloadedAt);
+            resolve(records);
+          }
+        };
+        request.onerror = () => resolve([]);
+      });
+    });
+
+    if (result !== null && result !== undefined) return result;
+    return Array.from(this.memDownloadedPlaylists.values())
+      .sort((a, b) => b.downloadedAt - a.downloadedAt);
+  }
+
+  async putDownloadedPlaylist(playlist: DownloadedPlaylistRecord): Promise<void> {
+    const record = {
+      ...playlist,
+      coverUrls: [...playlist.coverUrls],
+      trackIds: [...new Set(playlist.trackIds)],
+    };
+    this.memDownloadedPlaylists.set(record.id, record);
+    await this.runTransaction("downloadedPlaylists", "readwrite", (store) => {
+      return new Promise<void>((resolve, reject) => {
+        const request = store.put(record);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    });
+  }
+
+  async removeTrackFromDownloadedPlaylists(trackId: string): Promise<void> {
+    const playlists = await this.getDownloadedPlaylists();
+    for (const playlist of playlists) {
+      if (!playlist.trackIds.includes(trackId)) continue;
+      const trackIds = playlist.trackIds.filter((id) => id !== trackId);
+      if (trackIds.length === 0) {
+        this.memDownloadedPlaylists.delete(playlist.id);
+        await this.runTransaction("downloadedPlaylists", "readwrite", (store) => {
+          return new Promise<void>((resolve) => {
+            const request = store.delete(playlist.id);
+            request.onsuccess = () => resolve();
+            request.onerror = () => resolve();
+          });
+        });
+      } else {
+        await this.putDownloadedPlaylist({ ...playlist, trackIds });
+      }
+    }
   }
 
   async touchAudio(trackId: string): Promise<void> {
@@ -683,9 +758,10 @@ class LinerDb {
     return total;
   }
 
-  async clearStore(storeName: "tracks" | "audio" | "lyrics" | "artists"): Promise<void> {
+  async clearStore(storeName: "tracks" | "audio" | "downloadedPlaylists" | "lyrics" | "artists"): Promise<void> {
     if (storeName === "tracks") this.memTracks.clear();
     if (storeName === "audio") this.memAudio.clear();
+    if (storeName === "downloadedPlaylists") this.memDownloadedPlaylists.clear();
     if (storeName === "lyrics") this.memLyrics.clear();
     if (storeName === "artists") this.memArtists.clear();
 
@@ -711,9 +787,11 @@ class LinerDb {
   async clearAll(): Promise<void> {
     this.memTracks.clear();
     this.memAudio.clear();
+    this.memDownloadedPlaylists.clear();
     this.memLyrics.clear();
     this.memArtists.clear();
     await this.clearStore("audio");
+    await this.clearStore("downloadedPlaylists");
     await this.clearStore("tracks");
     await this.clearStore("lyrics");
     await this.clearStore("artists");

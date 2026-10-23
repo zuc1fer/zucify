@@ -2,6 +2,7 @@ export {
   linerDb,
   type CachedTrackRecord,
   type CachedAudioRecord,
+  type DownloadedPlaylistRecord,
   type CachedLyricsRecord,
   type CachedArtistRecord,
 } from "./linerDb";

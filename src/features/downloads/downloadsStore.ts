@@ -2,8 +2,12 @@ import { create } from "zustand";
 import type { Track } from "@/shared/types";
 import {
   downloadTrackForOffline,
+  listDownloadedPlaylists,
   listDownloadedTracks,
   removeDownloadedTrack,
+  saveDownloadedPlaylist,
+  type DownloadedPlaylist,
+  type DownloadedPlaylistInput,
   type DownloadedTrack,
 } from "./downloadService";
 
@@ -18,11 +22,13 @@ export interface DownloadJob {
 
 interface DownloadsState {
   items: DownloadedTrack[];
+  playlists: DownloadedPlaylist[];
   downloadedIds: Set<string>;
   jobs: Record<string, DownloadJob>;
   isLoading: boolean;
   refresh: () => Promise<void>;
   enqueue: (tracks: readonly Track[]) => void;
+  enqueuePlaylist: (playlist: DownloadedPlaylistInput, tracks: readonly Track[]) => Promise<void>;
   cancel: (trackId: string) => void;
   remove: (trackId: string) => Promise<void>;
 }
@@ -97,14 +103,18 @@ function startQueue(
 
 export const useDownloadsStore = create<DownloadsState>((set, get) => ({
   items: [],
+  playlists: [],
   downloadedIds: new Set(),
   jobs: {},
   isLoading: false,
   refresh: async () => {
     set({ isLoading: true });
     try {
-      const items = await listDownloadedTracks();
-      set({ items, downloadedIds: new Set(items.map((item) => item.track.id)) });
+      const [items, playlists] = await Promise.all([
+        listDownloadedTracks(),
+        listDownloadedPlaylists(),
+      ]);
+      set({ items, playlists, downloadedIds: new Set(items.map((item) => item.track.id)) });
     } finally {
       set({ isLoading: false });
     }
@@ -124,6 +134,14 @@ export const useDownloadsStore = create<DownloadsState>((set, get) => ({
       startQueue(get, set);
     }
   },
+  enqueuePlaylist: async (playlist, tracks) => {
+    const savedPlaylist = await saveDownloadedPlaylist(playlist);
+    set((state) => ({
+      playlists: [savedPlaylist, ...state.playlists.filter((item) => item.id !== savedPlaylist.id)]
+        .sort((a, b) => b.downloadedAt - a.downloadedAt),
+    }));
+    get().enqueue(tracks);
+  },
   cancel: (trackId) => {
     controllers.get(trackId)?.abort();
     pendingIds.delete(trackId);
@@ -135,11 +153,13 @@ export const useDownloadsStore = create<DownloadsState>((set, get) => ({
   remove: async (trackId) => {
     get().cancel(trackId);
     await removeDownloadedTrack(trackId);
+    const playlists = await listDownloadedPlaylists();
     set((state) => {
       const downloadedIds = new Set(state.downloadedIds);
       downloadedIds.delete(trackId);
       return {
         items: state.items.filter((item) => item.track.id !== trackId),
+        playlists,
         downloadedIds,
       };
     });

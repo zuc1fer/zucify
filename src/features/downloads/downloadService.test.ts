@@ -12,6 +12,9 @@ const { audioCache, linerDb, resolvePlaybackStream, downloadAudioBytes, records 
     putTrack: vi.fn(),
     markAudioDownloaded: vi.fn(),
     getDownloadedAudioRecords: vi.fn(),
+    getDownloadedPlaylists: vi.fn(),
+    putDownloadedPlaylist: vi.fn(),
+    removeTrackFromDownloadedPlaylists: vi.fn(),
   },
   resolvePlaybackStream: vi.fn(),
   downloadAudioBytes: vi.fn(),
@@ -22,7 +25,11 @@ vi.mock("@/shared/storage", () => ({ audioCache, linerDb }));
 vi.mock("@/features/player/engine/streamResolver", () => ({ resolvePlaybackStream }));
 vi.mock("@/shared/media/innertube", () => ({ downloadAudioBytes }));
 
-import { downloadTrackForOffline, removeDownloadedTrack } from "./downloadService";
+import {
+  downloadTrackForOffline,
+  removeDownloadedTrack,
+  saveDownloadedPlaylist,
+} from "./downloadService";
 
 const track = {
   id: "track-offline-1",
@@ -99,5 +106,20 @@ describe("offline track downloads", () => {
   it("removes a saved offline copy from local audio storage", async () => {
     await removeDownloadedTrack(track.id);
     expect(audioCache.deleteAudio).toHaveBeenCalledWith(track.id);
+    expect(linerDb.removeTrackFromDownloadedPlaylists).toHaveBeenCalledWith(track.id);
+  });
+
+  it("saves downloaded playlist metadata with unique track membership", async () => {
+    const playlist = await saveDownloadedPlaylist({
+      id: "source:playlist-1",
+      title: "Night Drive",
+      coverUrl: "cover.jpg",
+      coverUrls: ["cover.jpg", "cover.jpg"],
+      trackIds: [track.id, track.id],
+    });
+
+    expect(playlist.trackIds).toEqual([track.id]);
+    expect(playlist.downloadedAt).toBeTypeOf("number");
+    expect(linerDb.putDownloadedPlaylist).toHaveBeenCalledWith(playlist);
   });
 });

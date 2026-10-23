@@ -1,4 +1,9 @@
-import { audioCache, linerDb, type CachedAudioRecord } from "@/shared/storage";
+import {
+  audioCache,
+  linerDb,
+  type CachedAudioRecord,
+  type DownloadedPlaylistRecord,
+} from "@/shared/storage";
 import { isStandaloneAudioFile } from "@/shared/storage/audioFormat";
 import { downloadAudioBytes } from "@/shared/media/innertube";
 import { resolvePlaybackStream } from "@/features/player/engine/streamResolver";
@@ -8,6 +13,26 @@ export interface DownloadedTrack {
   track: Track;
   downloadedAt: number;
   byteSize: number;
+}
+
+export type DownloadedPlaylist = DownloadedPlaylistRecord;
+export type DownloadedPlaylistInput = Omit<DownloadedPlaylistRecord, "downloadedAt">;
+
+export async function listDownloadedPlaylists(): Promise<DownloadedPlaylist[]> {
+  return linerDb.getDownloadedPlaylists();
+}
+
+export async function saveDownloadedPlaylist(
+  playlist: DownloadedPlaylistInput,
+): Promise<DownloadedPlaylist> {
+  const record: DownloadedPlaylist = {
+    ...playlist,
+    coverUrls: [...playlist.coverUrls],
+    trackIds: [...new Set(playlist.trackIds)],
+    downloadedAt: Date.now(),
+  };
+  await linerDb.putDownloadedPlaylist(record);
+  return record;
 }
 
 function isValidAudioBlob(blob: Blob): Promise<boolean> {
@@ -85,4 +110,5 @@ export async function downloadTrackForOffline(
 
 export async function removeDownloadedTrack(trackId: string): Promise<void> {
   await audioCache.deleteAudio(trackId);
+  await linerDb.removeTrackFromDownloadedPlaylists(trackId);
 }
