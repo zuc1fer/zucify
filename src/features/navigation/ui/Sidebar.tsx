@@ -186,6 +186,8 @@ function Sidebar({ searchOpen, onSearchToggle, isEdgeToEdge = false }: SidebarPr
             alt="Logo"
             width={34}
             height={34}
+            autoCropLetterbox={false}
+            style={{ objectFit: "contain", objectPosition: "center" }}
             className={
               "w-[34px] h-[34px] " +
               (accentVariant === "default" ||

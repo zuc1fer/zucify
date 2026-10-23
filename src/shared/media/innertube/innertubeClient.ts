@@ -1,3 +1,4 @@
+import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { getClientVisitorData } from "@/shared/api/visitorSession";
 
 export type InnertubeEndpoint = "search" | "browse" | "next" | "player";
@@ -75,6 +76,38 @@ export async function postInnertube(
       user: { lockedSafetyMode: false },
     },
   };
+
+  if (Capacitor.isNativePlatform()) {
+    if (options.signal?.aborted) {
+      throw options.signal.reason ?? new DOMException("The request was aborted.", "AbortError");
+    }
+    try {
+      const nativeResponse = await CapacitorHttp.post({
+        url,
+        headers: buildHeaders(profile, visitorData),
+        data: payload,
+        responseType: "json",
+        connectTimeout: 15_000,
+        readTimeout: 20_000,
+      });
+      if (options.signal?.aborted) {
+        throw options.signal.reason ?? new DOMException("The request was aborted.", "AbortError");
+      }
+      if (nativeResponse.status < 200 || nativeResponse.status >= 300) {
+        throw new InnertubeError(
+          `YouTube Music ${endpoint} failed with HTTP ${nativeResponse.status}.`,
+          nativeResponse.status,
+        );
+      }
+      return nativeResponse.data as unknown;
+    } catch (error) {
+      if (options.signal?.aborted) {
+        throw options.signal.reason ?? new DOMException("The request was aborted.", "AbortError");
+      }
+      if (error instanceof InnertubeError) throw error;
+      throw new InnertubeError("YouTube Music is unreachable.", 0);
+    }
+  }
 
   let response: Response;
   try {

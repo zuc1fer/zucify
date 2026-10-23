@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import { usePlayerStore } from "../store/playerStore";
 import { ApiError } from "@/shared/api";
 import { log } from "@/shared/utils/logger";
@@ -124,7 +125,9 @@ export class PlayerRuntime {
   }
 
   private setupMediaSession() {
-    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    // Capacitor owns a native Android media session. Registering a second
+    // WebView session can steal lock-screen and notification actions from it.
+    if (Capacitor.isNativePlatform() || typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
 
     try {
       navigator.mediaSession.setActionHandler("play", () => {
@@ -170,7 +173,7 @@ export class PlayerRuntime {
   // windows' media controls (and apps built on them, like FluentFlyout) read this.
   // "loading" between tracks still reports playing so the session never looks finished.
   private syncMediaSessionState(status: string) {
-    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    if (Capacitor.isNativePlatform() || typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
     try {
       navigator.mediaSession.playbackState =
         status === "playing" || status === "loading"
@@ -186,7 +189,7 @@ export class PlayerRuntime {
 
   // progress / seek bar in the system controls
   private syncMediaSessionPosition() {
-    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    if (Capacitor.isNativePlatform() || typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
     const ms = navigator.mediaSession as MediaSession & {
       setPositionState?: (state?: MediaPositionState) => void;
     };
@@ -206,7 +209,7 @@ export class PlayerRuntime {
   }
 
   public updateMediaSessionMetadata(track: Track | null) {
-    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    if (Capacitor.isNativePlatform() || typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
     if (!track) {
       navigator.mediaSession.metadata = null;
       return;
@@ -589,7 +592,7 @@ export class PlayerRuntime {
   public stop(): void {
     this.cancelPendingLoad();
     this.updateMediaSessionMetadata(null);
-    if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
+    if (!Capacitor.isNativePlatform() && typeof navigator !== "undefined" && "mediaSession" in navigator) {
       try {
         navigator.mediaSession.playbackState = "none";
       } catch {}

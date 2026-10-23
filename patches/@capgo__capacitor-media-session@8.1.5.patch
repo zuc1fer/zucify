@@ -173,3 +173,32 @@ index 0000000000000000000000000000000000000000..0074a7781f076ef81419ad5decd32e69
 +        android:fillColor="@android:color/white"
 +        android:pathData="M14,5h7v7h-2V8.41l-4.29,4.3 -1.42,-1.42L17.59,7H14V5zM3,6h5.59l11.7,11.7 -1.41,1.41L7.78,8H3V6zM3,18h4.78l4.72,-4.72 1.41,1.41L8.59,20H3v-2z" />
 +</vector>
+diff --git a/android/src/main/res/drawable/ic_baseline_volume_up_24.xml b/android/src/main/res/drawable/ic_baseline_volume_up_24.xml
+--- a/android/src/main/res/drawable/ic_baseline_volume_up_24.xml
++++ b/android/src/main/res/drawable/ic_baseline_volume_up_24.xml
+@@ -1,10 +1,22 @@
+ <vector xmlns:android="http://schemas.android.com/apk/res/android"
+     android:height="24dp"
+-    android:tint="#000000"
+     android:viewportHeight="24"
+     android:viewportWidth="24"
+     android:width="24dp">
+     <path
+-        android:fillColor="@android:color/white"
+-        android:pathData="M3,9v6h4l5,5L12,4L7,9L3,9zM16.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02zM14,3.23v2.06c2.89,0.86 5,3.54 5,6.71s-2.11,5.85 -5,6.71v2.06c4.01,-0.91 7,-4.49 7,-8.77s-2.99,-7.86 -7,-8.77z" />
++        android:fillColor="@android:color/transparent"
++        android:pathData="M12.1,3.8 C7.5,3.8 3.8,7.5 3.8,12 s3.7,8.2 8.3,8.2 8.3,-3.6 8.3,-8.2 c0,-4.1 -2.7,-7.5 -6.4,-8.1"
++        android:strokeColor="#FFFFFFFF"
++        android:strokeLineCap="round"
++        android:strokeLineJoin="round"
++        android:strokeWidth="2.5" />
++    <path
++        android:fillColor="#FFFFFFFF"
++        android:pathData="M10.8,4.7 C10.2,2.8 11.4,1.5 13.4,1.8 L17.1,2.4 C18.4,2.7 19,4 18.3,5.1 L16.2,7.1 L12.8,6.5 Z" />
++    <path
++        android:fillColor="@android:color/transparent"
++        android:pathData="M12.2,2.6 L11.1,1.5 M14.6,2.1 L15.6,1.2"
++        android:strokeColor="#FFFFFFFF"
++        android:strokeLineCap="round"
++        android:strokeWidth="1.1" />
+ </vector>

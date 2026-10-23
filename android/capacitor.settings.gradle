@@ -6,4 +6,4 @@ include ':capacitor-app'
 project(':capacitor-app').projectDir = new File('../node_modules/.pnpm/@capacitor+app@8.1.2_@capacitor+core@8.5.3/node_modules/@capacitor/app/android')
 
 include ':capgo-capacitor-media-session'
-project(':capgo-capacitor-media-session').projectDir = new File('../node_modules/.pnpm/@capgo+capacitor-media-sess_3371af7582363e19e8b7959da9d171e6/node_modules/@capgo/capacitor-media-session/android')
+project(':capgo-capacitor-media-session').projectDir = new File('../node_modules/.pnpm/@capgo+capacitor-media-sess_3a9094d3d1fc4126a60fe3f41f4e267f/node_modules/@capgo/capacitor-media-session/android')
